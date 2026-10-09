@@ -1,6 +1,6 @@
 """Local SQLite history store so the model can accumulate its own season data.
 
-Stdlib-only (sqlite3) so it works unmodified inside the Buildozer/Android build.
+Stdlib-only (sqlite3) so it works unmodified in the packaged mobile app.
 """
 import logging
 import sqlite3
@@ -59,6 +59,8 @@ class HistoryStore:
                 ON CONFLICT(game_id) DO UPDATE SET
                     home_score=excluded.home_score,
                     away_score=excluded.away_score,
+                    home_spread=COALESCE(excluded.home_spread, games.home_spread),
+                    over_under=COALESCE(excluded.over_under, games.over_under),
                     completed=excluded.completed
                 """,
                 (

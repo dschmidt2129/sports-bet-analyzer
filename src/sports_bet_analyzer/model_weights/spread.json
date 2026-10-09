@@ -1,0 +1,13 @@
+{
+  "bias": -0.06613651961258679,
+  "weights": {
+    "ppg_diff": -0.11038008454688929,
+    "papg_diff": 0.0,
+    "ypp_diff": 0.0,
+    "yppa_diff": 0.0,
+    "turnover_margin_diff": 0.0024375572114758545,
+    "win_pct_diff": 0.0,
+    "fpi_diff": 0.0,
+    "home_field": -0.060117494115991967
+  }
+}

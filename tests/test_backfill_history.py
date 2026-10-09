@@ -26,6 +26,9 @@ class FakeClient:
     def team_statistics(self, league, team_id):
         return {}
 
+    def odds(self, league, event_id):
+        return {}
+
     def fpi(self, league):
         return {}
 

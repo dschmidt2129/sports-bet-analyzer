@@ -16,6 +16,7 @@ from sports_bet_analyzer.models import Game, OddsLine, TeamStats
 log = logging.getLogger(__name__)
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/football"
+CORE_BASE = "https://sports.core.api.espn.com/v2/sports/football/leagues"
 LEAGUES = ("nfl", "college-football")
 
 _DEFAULT_TIMEOUT = 10
@@ -69,6 +70,11 @@ class ESPNClient:
     def team_statistics(self, league, team_id):
         log.info("Fetching team statistics league=%s team_id=%s", league, team_id)
         return self._get(f"{BASE}/{league}/teams/{team_id}/statistics")
+
+    def odds(self, league, event_id):
+        # The scoreboard drops odds once a game finishes; the core API keeps them.
+        log.info("Fetching odds league=%s event_id=%s", league, event_id)
+        return self._get(f"{CORE_BASE}/{league}/events/{event_id}/competitions/{event_id}/odds")
 
     def fpi(self, league):
         # Undocumented; treated as best-effort cold-start data only.
@@ -137,6 +143,25 @@ def parse_odds_from_competition(competition):
         home_moneyline=_safe_int(odds.get("homeTeamOdds", {}).get("moneyLine")),
         away_moneyline=_safe_int(odds.get("awayTeamOdds", {}).get("moneyLine")),
     )
+
+
+def parse_odds_from_core(raw):
+    items = raw.get("items") if raw else None
+    if not items:
+        return None
+    return parse_odds_from_competition({"odds": items})
+
+
+def fill_missing_odds(client, games):
+    """Fetches odds from the core API for games whose scoreboard entry had none."""
+    for game in games:
+        if game.odds is not None and game.odds.home_spread is not None:
+            continue
+        odds = parse_odds_from_core(client.odds(game.league, game.game_id))
+        if odds is not None:
+            game.odds = odds
+        else:
+            log.debug("No odds available for game_id=%s", game.game_id)
 
 
 def _safe_int(value):

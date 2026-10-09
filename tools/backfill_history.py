@@ -18,6 +18,7 @@ from sports_bet_analyzer.espn_client import (
     ESPNClient,
     enrich_games_with_team_stats,
     fetch_all_league_team_stats,
+    fill_missing_odds,
     parse_games_from_scoreboard,
 )  # noqa: E402
 from sports_bet_analyzer.storage import HistoryStore  # noqa: E402
@@ -57,6 +58,7 @@ def backfill(client, store, league, start_week, end_week, delay_seconds=0.5):
         # Season-to-date stats only (ESPN has no historical per-week stats endpoint),
         # so earlier weeks' snapshots are an approximation using current-season stats.
         enrich_games_with_team_stats(client, games, cache=team_stats_cache)
+        fill_missing_odds(client, [g for g in games if g.completed])
 
         for game in games:
             game.home_team.fpi = fpi_ratings.get(game.home_team.team_id)

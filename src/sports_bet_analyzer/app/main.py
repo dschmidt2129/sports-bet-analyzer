@@ -1,21 +1,18 @@
-"""Kivy app entry point. Fetches this week's games and shows ranked high-probability bets."""
+"""BeeWare app entry point. Fetches games and shows ranked recommendations."""
+import asyncio
 import logging
 
-from kivy.app import App
-from kivy.clock import mainthread
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.label import Label
-from kivy.uix.screenmanager import Screen, ScreenManager
-from kivy.uix.scrollview import ScrollView
+import toga
+from toga.style import Pack
+from toga.style.pack import COLUMN, ROW
 
 from sports_bet_analyzer.espn_client import (
     ESPNClient,
     enrich_games_with_team_stats,
     fetch_all_league_team_stats,
+    fill_missing_odds,
     parse_games_from_scoreboard,
 )
-from sports_bet_analyzer.models import TeamStats
 from sports_bet_analyzer.predictor import Predictor
 from sports_bet_analyzer.recommender import rank_games
 from sports_bet_analyzer.storage import HistoryStore
@@ -25,54 +22,69 @@ log = logging.getLogger(__name__)
 LEAGUES = ("nfl", "college-football")
 
 
-class RecommendationsScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+class SportsBetApp(toga.App):
+    def startup(self):
         self.client = ESPNClient()
         self.predictor = Predictor()
         self.history = HistoryStore()
         self._team_stats_cache = {}
 
-        root = BoxLayout(orientation="vertical")
-        self.status_label = Label(text="Tap refresh to load this week's games.", size_hint_y=None, height=40)
-        refresh_button = Button(text="Refresh", size_hint_y=None, height=48)
-        refresh_button.bind(on_release=lambda *_: self.refresh())
+        self.status_label = toga.Label(
+            "Tap refresh to load this week's games.",
+            style=Pack(padding=5),
+        )
+        self.refresh_button = toga.Button(
+            "Refresh",
+            on_press=self.refresh,
+            style=Pack(padding=5),
+        )
+        self.results_box = toga.Box(style=Pack(direction=COLUMN, flex=1, padding=5))
+        results_scroll = toga.ScrollContainer(
+            content=self.results_box,
+            horizontal=False,
+            style=Pack(flex=1),
+        )
+        root = toga.Box(
+            children=[self.refresh_button, self.status_label, results_scroll],
+            style=Pack(direction=COLUMN, flex=1, padding=5),
+        )
 
-        self.results_box = BoxLayout(orientation="vertical", size_hint_y=None, spacing=6, padding=6)
-        self.results_box.bind(minimum_height=self.results_box.setter("height"))
-        scroll = ScrollView()
-        scroll.add_widget(self.results_box)
+        self.main_window = toga.MainWindow(title=self.formal_name)
+        self.main_window.content = root
+        self.main_window.show()
 
-        root.add_widget(refresh_button)
-        root.add_widget(self.status_label)
-        root.add_widget(scroll)
-        self.add_widget(root)
-
-    def refresh(self):
+    async def refresh(self, widget):
         log.info("Refresh triggered")
         self.status_label.text = "Loading..."
-        self.results_box.clear_widgets()
+        self.refresh_button.enabled = False
+        self.results_box.remove(*self.results_box.children)
         try:
-            fpi_cache = self._load_fpi_cache()
-            games = []
-            for league in LEAGUES:
-                raw = self.client.scoreboard(league)
-                league_games = parse_games_from_scoreboard(raw, league)
-                games.extend(league_games)
-                week = league_games[0].week if league_games else None
-                self._persist_full_league_stats(league, week, fpi_cache.get(league, {}))
-            log.info("Fetched %d game(s) across %d league(s)", len(games), len(LEAGUES))
-            self._apply_fpi(games, fpi_cache)
-            enrich_games_with_team_stats(self.client, games, cache=self._team_stats_cache)
-            self._persist_history(games)
-            recommendations = rank_games(games, self.predictor)
-            self._render(recommendations)
+            recommendations = await asyncio.to_thread(self._load_recommendations)
         except Exception:
             log.exception("Failed to refresh recommendations")
             self.status_label.text = "Failed to load games. Check your connection and try again."
+        else:
+            self._render(recommendations)
+        finally:
+            self.refresh_button.enabled = True
+
+    def _load_recommendations(self):
+        fpi_cache = self._load_fpi_cache()
+        games = []
+        for league in LEAGUES:
+            raw = self.client.scoreboard(league)
+            league_games = parse_games_from_scoreboard(raw, league)
+            games.extend(league_games)
+            week = league_games[0].week if league_games else None
+            self._persist_full_league_stats(league, week, fpi_cache.get(league, {}))
+        log.info("Fetched %d game(s) across %d league(s)", len(games), len(LEAGUES))
+        self._apply_fpi(games, fpi_cache)
+        enrich_games_with_team_stats(self.client, games, cache=self._team_stats_cache)
+        self._persist_history(games)
+        return rank_games(games, self.predictor)
 
     def _persist_full_league_stats(self, league, week, fpi_ratings):
-        """Persists a stat snapshot for every team in the league, including teams on a bye."""
+        """Persists a stat snapshot for every team, including teams on a bye."""
         league_teams = fetch_all_league_team_stats(self.client, league, cache=self._team_stats_cache)
         log.info(
             "Persisting full-league stat snapshot league=%s week=%s (%d team(s))",
@@ -84,9 +96,10 @@ class RecommendationsScreen(Screen):
 
     def _persist_history(self, games):
         log.debug("Persisting history for %d game(s)", len(games))
+        fill_missing_odds(self.client, [game for game in games if game.completed])
         for game in games:
-            if game.completed:
-                self.history.save_game_result(game)
+            # Upcoming games are saved too so their pre-game line is captured before ESPN drops it.
+            self.history.save_game_result(game)
             week = game.week or 0
             self.history.save_team_stat_snapshot(game.league, game.home_team, week)
             self.history.save_team_stat_snapshot(game.league, game.away_team, week)
@@ -108,7 +121,6 @@ class RecommendationsScreen(Screen):
             game.home_team.fpi = ratings.get(game.home_team.team_id)
             game.away_team.fpi = ratings.get(game.away_team.team_id)
 
-    @mainthread
     def _render(self, recommendations):
         if not recommendations:
             log.info("No high-probability bets found this refresh")
@@ -117,22 +129,40 @@ class RecommendationsScreen(Screen):
 
         log.info("Rendering %d recommendation(s)", len(recommendations))
         self.status_label.text = f"{len(recommendations)} high-probability bet(s) found."
+
+        header = toga.Box(style=Pack(direction=ROW, padding_bottom=5))
+        for text, flex in (
+            ("Home Team", 0.23),
+            ("Away Team", 0.23),
+            ("Recommendation", 0.54),
+        ):
+            header.add(
+                toga.Label(text, style=Pack(flex=flex, font_weight="bold", padding=3))
+            )
+        self.results_box.add(header)
+
         for rec in recommendations:
-            text = f"[{rec.bet_type.upper()}] {rec.selection} - {rec.probability:.0%}\n{rec.reasoning}"
-            self.results_box.add_widget(Label(text=text, size_hint_y=None, height=70, halign="left"))
-
-
-class SportsBetApp(App):
-    def build(self):
-        sm = ScreenManager()
-        sm.add_widget(RecommendationsScreen(name="recommendations"))
-        return sm
+            row = toga.Box(style=Pack(direction=ROW, padding_bottom=5))
+            cells = (
+                (rec.home_team_name, 0.23),
+                (rec.away_team_name, 0.23),
+                (
+                    f"[{rec.bet_type.upper()}] {rec.selection} - {rec.probability:.0%}\n"
+                    f"{rec.reasoning}",
+                    0.54,
+                ),
+            )
+            for text, flex in cells:
+                row.add(toga.Label(text, style=Pack(flex=flex, padding=3)))
+            self.results_box.add(row)
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
-    SportsBetApp().run()
+    return SportsBetApp(
+        formal_name="Sports Bet Analyzer",
+        app_id="org.sportsbetanalyzer",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    main().main_loop()

@@ -57,3 +57,5 @@ class PredictionResult:
     selection: str
     probability: float
     reasoning: str
+    home_team_name: str = ""
+    away_team_name: str = ""

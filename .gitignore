@@ -3,7 +3,10 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
-.buildozer/
+.briefcase/
+build/
 bin/
 *.db
 .venv/
+.vscode/
+*/sports_bet_analyzer.dist-info/

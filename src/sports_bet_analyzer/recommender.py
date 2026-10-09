@@ -97,4 +97,6 @@ def _build_result(game, bet_type, selection, probability, is_model):
         selection=selection,
         probability=max(probability, 1 - probability),
         reasoning=reasoning,
+        home_team_name=game.home_team.name,
+        away_team_name=game.away_team.name,
     )

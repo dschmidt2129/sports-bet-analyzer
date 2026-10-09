@@ -23,6 +23,8 @@ def test_recommend_for_game_cold_start_uses_fpi_fallback(tmp_path):
     assert "moneyline" in bet_types
     for r in results:
         assert 0.5 <= r.probability <= 1.0
+        assert r.home_team_name == "Home"
+        assert r.away_team_name == "Away"
 
 
 def test_recommend_for_game_uses_trained_model_when_available(tmp_path):

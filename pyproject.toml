@@ -1,0 +1,19 @@
+[tool.briefcase]
+project_name = "Sports Bet Analyzer"
+bundle = "org.sportsbetanalyzer"
+version = "0.1.0"
+url = "https://github.com/dschmidt2129/sports-bet-analyzer"
+license = "LicenseRef-Proprietary"
+
+[tool.briefcase.app.sports_bet_analyzer]
+formal_name = "Sports Bet Analyzer"
+description = "NFL and college football betting recommendations."
+sources = ["src/sports_bet_analyzer"]
+requires = ["requests"]
+
+[tool.briefcase.app.sports_bet_analyzer.windows]
+requires = ["toga-winforms~=0.5.0"]
+
+[tool.briefcase.app.sports_bet_analyzer.android]
+requires = ["toga-android~=0.5.0"]
+build_gradle_dependencies = ["com.google.android.material:material:1.13.0"]

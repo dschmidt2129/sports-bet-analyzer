@@ -1,8 +1,8 @@
 # Sports Bet Analyzer
 
 Suggests high-probability NFL / NCAA Football bets (spread, moneyline, totals,
-player props) using only free public data from ESPN's API, with a Kivy UI that
-packages into an Android APK via Buildozer.
+player props) using only free public data from ESPN's API, with a BeeWare Toga
+UI that can be packaged for Android with Briefcase.
 
 > **Informational use only.** This tool does not place bets, guarantee
 > outcomes, or constitute financial advice. Sports betting involves risk;
@@ -25,22 +25,22 @@ packages into an Android APK via Buildozer.
   those JSON weights and rank upcoming games by predicted probability. Until
   enough in-season history accumulates, recommendations fall back to an
   FPI-differential estimate.
-- `app/main.py` is the Kivy UI: tap Refresh to fetch this week's NFL/NCAAF
+- `app/main.py` is the Toga UI: tap Refresh to fetch this week's NFL/NCAAF
   games and show bets above a confidence threshold.
 
 ## Desktop setup
 
+From the project root, create and activate a virtual environment, then install
+the desktop dependencies. On Windows, Toga's native backend also requires the
+.NET 10 runtime.
+
 ```bash
+cd ~/Documents/PythonProjects/sports-bet-analyzer
 python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-pip install -r requirements-dev.txt
+source .venv/Scripts/activate  # Windows Git Bash; use .venv/bin/activate on macOS/Linux
+python -m pip install -r requirements-dev.txt
 pytest
-```
-
-Run the app on desktop before packaging:
-
-```bash
-python -m sports_bet_analyzer.app.main
+python src/main.py
 ```
 
 ## Backfilling history
@@ -72,15 +72,15 @@ accumulates.
 ## Building for Android
 
 ```bash
-pip install buildozer
-buildozer init          # only if buildozer.spec doesn't already exist
-buildozer android debug deploy run
+python -m pip install briefcase
+briefcase create android
+briefcase build android
+briefcase run android
 ```
 
-The mobile app only requires `requests` and `kivy` (see `requirements.txt`) -
-training dependencies (`numpy`) stay in `requirements-dev.txt` and are never
-installed on-device, since scientific-Python packages are not reliably
-buildable through python-for-android.
+Briefcase's Android build requires its Android SDK/NDK toolchain. The mobile app
+uses `toga` and `requests` (see `requirements.txt`); training dependencies
+(`numpy`) stay in `requirements-dev.txt` and are not packaged on-device.
 
 ## Notes on data sources
 
