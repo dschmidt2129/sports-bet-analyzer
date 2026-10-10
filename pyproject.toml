@@ -1,19 +1,29 @@
-[tool.briefcase]
-project_name = "Sports Bet Analyzer"
-bundle = "org.sportsbetanalyzer"
-version = "0.1.0"
-url = "https://github.com/dschmidt2129/sports-bet-analyzer"
-license = "LicenseRef-Proprietary"
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
-[tool.briefcase.app.sports_bet_analyzer]
-formal_name = "Sports Bet Analyzer"
-description = "NFL and college football betting recommendations."
-sources = ["src/sports_bet_analyzer"]
-requires = ["requests"]
+[project]
+name = "sports-bet-analyzer"
+version = "1.0.0"
+description = "Football betting recommendations API and mobile app backend."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "requests",
+    "uvicorn>=0.30,<1",
+]
 
-[tool.briefcase.app.sports_bet_analyzer.windows]
-requires = ["toga-winforms~=0.5.0"]
+[project.optional-dependencies]
+dev = [
+    "httpx2",
+    "numpy",
+    "pytest",
+    "pytest-cov",
+]
 
-[tool.briefcase.app.sports_bet_analyzer.android]
-requires = ["toga-android~=0.5.0"]
-build_gradle_dependencies = ["com.google.android.material:material:1.13.0"]
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sports_bet_analyzer = ["model_weights/*.json"]

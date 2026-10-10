@@ -1,91 +1,100 @@
 # Sports Bet Analyzer
 
-Suggests high-probability NFL / NCAA Football bets (spread, moneyline, totals,
-player props) using only free public data from ESPN's API, with a BeeWare Toga
-UI that can be packaged for Android with Briefcase.
+A React mobile-friendly interface for high-confidence NFL and college football
+bet recommendations, packaged for Android with Capacitor. A Python FastAPI
+backend retains the existing ESPN integration, SQLite history, and prediction
+logic.
 
 > **Informational use only.** This tool does not place bets, guarantee
 > outcomes, or constitute financial advice. Sports betting involves risk;
-> bet only what you can afford to lose, and check your local laws/age
+> bet only what you can afford to lose, and check your local laws and age
 > requirements before wagering.
 
-## How it works
+## Architecture
 
-- `espn_client.py` pulls scores, team stats, ESPN's own odds (`pickcenter`)
-  block, and FPI power ratings from ESPN's public JSON API. Every refresh
-  persists a stat snapshot for **every** team in the league (via the
-  `/teams` endpoint), including teams on a bye that week - not just teams
-  with a scheduled game.
-- `storage.py` caches completed games/stat snapshots in a local SQLite file so
-  the model can build its own in-season history (no paid historical data
-  provider is used).
-- `tools/train_offline.py` (desktop only) trains a small logistic-regression
-  model per bet type from that history and exports the weights as JSON.
-- `predictor.py` / `recommender.py` (mobile-safe, no numpy/pandas/sklearn) load
-  those JSON weights and rank upcoming games by predicted probability. Until
-  enough in-season history accumulates, recommendations fall back to an
-  FPI-differential estimate.
-- `app/main.py` is the Toga UI: choose NFL, college football, or all leagues,
-  then tap Refresh to show bets above a confidence threshold with their
-  available market odds.
+- `frontend/` contains the React + TypeScript + Vite UI and Capacitor Android
+  project configuration.
+- `src/sports_bet_analyzer/api.py` exposes recommendations at
+  `/api/recommendations?league=all|nfl|college-football`.
+- `recommendation_service.py` coordinates the existing ESPN client, predictor,
+  recommender, and SQLite history store.
+- `espn_client.py` fetches ESPN scores, team stats, odds, and FPI ratings.
+- `tools/train_offline.py` trains model weights from the locally cached game
+  history. Training dependencies stay out of the runtime API.
 
-## Desktop setup
-
-From the project root, create and activate a virtual environment, then install
-the desktop dependencies. On Windows, Toga's native backend also requires the
-.NET 10 runtime.
+## Run the backend
 
 ```bash
-cd ~/Documents/PythonProjects/sports-bet-analyzer
 python -m venv .venv
-source .venv/Scripts/activate  # Windows Git Bash; use .venv/bin/activate on macOS/Linux
+python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt
-pytest
-python src/main.py
+python -m uvicorn sports_bet_analyzer.api:app --app-dir src --reload
 ```
+
+The API is available at `http://127.0.0.1:8000`; its interactive docs are at
+`http://127.0.0.1:8000/docs`. For an Android device to access the API, run it
+with `--host 0.0.0.0` and configure `VITE_API_BASE_URL` in `frontend/.env.local`
+to an HTTPS URL reachable from that device. Do not expose an unencrypted API
+port directly to the public internet. For a separately hosted web UI, set
+`ALLOWED_ORIGINS` to a comma-separated list of its exact origins.
+
+## Run the web UI
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+For local browser development, Vite proxies `/api` requests to
+`http://127.0.0.1:8000`. Set `VITE_API_BASE_URL` only when the backend is at a
+different address.
+
+## Build and run on Android
+
+Install Node.js and the Android Studio SDK/NDK toolchain. Set the API base URL
+to a backend address reachable from the Android device (prefer HTTPS):
+
+```bash
+cd frontend
+npm install
+Copy-Item .env.example .env.local
+# Edit .env.local and set VITE_API_BASE_URL
+npm run build
+npm run cap:sync
+npm run cap:open:android
+```
+
+In Android Studio, select a device or emulator and run the `app` configuration.
+The emulator cannot reach a backend running on the host using `localhost`; use
+an HTTPS deployment or the emulator's host-loopback address instead.
 
 ## Backfilling history
 
-`app/main.py` only fetches the *current* week on each refresh, so any week you
-weren't running the app during is otherwise never captured. Catch the local
-history store up on earlier weeks with:
+The backend persists snapshots as it refreshes current games. To catch the
+history up on earlier weeks, run:
 
 ```bash
 python tools/backfill_history.py --league nfl --start-week 1 --end-week 3
 ```
 
-Repeat with `--league college-football` for NCAA Football. Defaults to
+Repeat with `--league college-football` for NCAA Football. The default range is
 regular-season week 1 through the league's typical max week.
 
 ## Training the model
 
-Requires a season's worth of completed games cached in the local SQLite DB
-(the app writes to it as it fetches results):
+Requires completed games in the SQLite history database:
 
 ```bash
 python tools/train_offline.py --league nfl
 ```
 
 This writes `src/sports_bet_analyzer/model_weights/spread.json`, which
-`predictor.py` picks up automatically. Repeat per league/bet type as data
+`predictor.py` picks up automatically. Repeat per league and bet type as data
 accumulates.
 
-## Building for Android
-
-```bash
-python -m pip install briefcase
-briefcase create android
-briefcase build android
-briefcase run android
-```
-
-Briefcase's Android build requires its Android SDK/NDK toolchain. The mobile app
-uses `toga` and `requests` (see `requirements.txt`); training dependencies
-(`numpy`) stay in `requirements-dev.txt` and are not packaged on-device.
-
-## Notes on data sources
+## Data source limitations
 
 ESPN's API is public but unofficial and undocumented; endpoints and query
-parameters have changed without notice in the past. All client calls fail
-soft (log + empty result) so a broken endpoint degrades gracefully instead of
-crashing the app.
+parameters may change without notice. The client logs request failures and
+returns empty results so an unavailable endpoint does not crash the service.
