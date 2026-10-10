@@ -24,14 +24,28 @@ def recommend_for_game(game, predictor, threshold=HIGH_CONFIDENCE_THRESHOLD):
         predictor, "spread", spread_features, spread_features["fpi_diff"] / FPI_SCALE
     )
     results.append(
-        _build_result(game, "spread", _spread_selection(game, spread_prob), spread_prob, spread_is_model)
+        _build_result(
+            game,
+            "spread",
+            _spread_selection(game, spread_prob),
+            spread_prob,
+            spread_is_model,
+            _spread_odds(game, spread_prob),
+        )
     )
 
     ml_prob, ml_is_model = _probability_with_fallback(
         predictor, "moneyline", spread_features, spread_features["fpi_diff"] / (FPI_SCALE * 0.75)
     )
     results.append(
-        _build_result(game, "moneyline", _moneyline_selection(game, ml_prob), ml_prob, ml_is_model)
+        _build_result(
+            game,
+            "moneyline",
+            _moneyline_selection(game, ml_prob),
+            ml_prob,
+            ml_is_model,
+            _moneyline_odds(game, ml_prob),
+        )
     )
 
     if game.odds and game.odds.over_under:
@@ -39,7 +53,14 @@ def recommend_for_game(game, predictor, threshold=HIGH_CONFIDENCE_THRESHOLD):
         total_prob = predictor.predict_probability("total", total_feats)
         if total_prob is not None:
             results.append(
-                _build_result(game, "total", _total_selection(game, total_prob), total_prob, True)
+                _build_result(
+                    game,
+                    "total",
+                    _total_selection(game, total_prob),
+                    total_prob,
+                    True,
+                    _total_odds(game, total_prob),
+                )
             )
 
     high_confidence = [r for r in results if r.probability >= threshold]
@@ -86,7 +107,25 @@ def _total_selection(game, prob):
     return f"{direction} {game.odds.over_under:.1f}"
 
 
-def _build_result(game, bet_type, selection, probability, is_model):
+def _spread_odds(game, prob):
+    if game.odds is None:
+        return None
+    return game.odds.home_spread_odds if prob >= 0.5 else game.odds.away_spread_odds
+
+
+def _moneyline_odds(game, prob):
+    if game.odds is None:
+        return None
+    return game.odds.home_moneyline if prob >= 0.5 else game.odds.away_moneyline
+
+
+def _total_odds(game, prob):
+    if game.odds is None:
+        return None
+    return game.odds.over_odds if prob >= 0.5 else game.odds.under_odds
+
+
+def _build_result(game, bet_type, selection, probability, is_model, odds=None):
     source = "trained model" if is_model else "FPI cold-start estimate"
     reasoning = (
         f"{game.away_team.name} @ {game.home_team.name} - probability from {source}."
@@ -97,6 +136,7 @@ def _build_result(game, bet_type, selection, probability, is_model):
         selection=selection,
         probability=max(probability, 1 - probability),
         reasoning=reasoning,
+        odds=odds,
         home_team_name=game.home_team.name,
         away_team_name=game.away_team.name,
     )

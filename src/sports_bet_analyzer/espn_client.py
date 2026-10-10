@@ -16,6 +16,7 @@ from sports_bet_analyzer.models import Game, OddsLine, TeamStats
 log = logging.getLogger(__name__)
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/football"
+FITT_BASE = "https://site.api.espn.com/apis/fitt/v3/sports/football"
 CORE_BASE = "https://sports.core.api.espn.com/v2/sports/football/leagues"
 LEAGUES = ("nfl", "college-football")
 
@@ -79,7 +80,7 @@ class ESPNClient:
     def fpi(self, league):
         # Undocumented; treated as best-effort cold-start data only.
         log.info("Fetching FPI ratings league=%s", league)
-        return self._get(f"{BASE}/{league}/fpi")
+        return self._get(f"{FITT_BASE}/{league}/powerindex", params={"limit": 1000})
 
 
 def _build_session():
@@ -136,13 +137,33 @@ def parse_odds_from_competition(competition):
     if not odds_list:
         return None
     odds = odds_list[0]
+    home = odds.get("homeTeamOdds", {})
+    away = odds.get("awayTeamOdds", {})
+    # The scoreboard nests prices as {"moneyline": {"home": {"close": {"odds": "-110"}}}}
+    # while the core API exposes them as flat numeric fields.
     return OddsLine(
         provider=odds.get("provider", {}).get("name", "unknown"),
         home_spread=odds.get("spread"),
         over_under=odds.get("overUnder"),
-        home_moneyline=_safe_int(odds.get("homeTeamOdds", {}).get("moneyLine")),
-        away_moneyline=_safe_int(odds.get("awayTeamOdds", {}).get("moneyLine")),
+        home_moneyline=_first_int(home.get("moneyLine"), _nested_odds(odds, "moneyline", "home")),
+        away_moneyline=_first_int(away.get("moneyLine"), _nested_odds(odds, "moneyline", "away")),
+        home_spread_odds=_first_int(home.get("spreadOdds"), _nested_odds(odds, "pointSpread", "home")),
+        away_spread_odds=_first_int(away.get("spreadOdds"), _nested_odds(odds, "pointSpread", "away")),
+        over_odds=_first_int(odds.get("overOdds"), _nested_odds(odds, "total", "over")),
+        under_odds=_first_int(odds.get("underOdds"), _nested_odds(odds, "total", "under")),
     )
+
+
+def _nested_odds(odds, market, side):
+    return ((odds.get(market) or {}).get(side) or {}).get("close", {}).get("odds")
+
+
+def _first_int(*values):
+    for value in values:
+        result = _safe_int(value)
+        if result is not None:
+            return result
+    return None
 
 
 def parse_odds_from_core(raw):
@@ -165,8 +186,10 @@ def fill_missing_odds(client, games):
 
 
 def _safe_int(value):
+    if isinstance(value, str) and value.strip().upper() in ("EVEN", "EV"):
+        return 100
     try:
-        return int(value)
+        return int(float(value))
     except (TypeError, ValueError):
         return None
 

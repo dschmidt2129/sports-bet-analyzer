@@ -20,8 +20,22 @@ from sports_bet_analyzer.storage import HistoryStore
 log = logging.getLogger(__name__)
 
 LEAGUES = ("nfl", "college-football")
+LEAGUE_OPTIONS = {
+    "All leagues": LEAGUES,
+    "NFL": ("nfl",),
+    "College football": ("college-football",),
+}
 
 
+def _extract_fpi(entry):
+    for category in entry.get("categories", []):
+        if category.get("name") == "fpi":
+            values = category.get("values") or []
+            return values[0] if values else None
+    return None
+
+
+# todo: begin adding player props
 class SportsBetApp(toga.App):
     def startup(self):
         self.client = ESPNClient()
@@ -30,12 +44,17 @@ class SportsBetApp(toga.App):
         self._team_stats_cache = {}
 
         self.status_label = toga.Label(
-            "Tap refresh to load this week's games.",
+            "Choose a league, then tap Refresh to load this week's games.",
             style=Pack(padding=5),
         )
         self.refresh_button = toga.Button(
             "Refresh",
             on_press=self.refresh,
+            style=Pack(padding=5),
+        )
+        self.league_selection = toga.Selection(
+            items=list(LEAGUE_OPTIONS),
+            value="All leagues",
             style=Pack(padding=5),
         )
         self.results_box = toga.Box(style=Pack(direction=COLUMN, flex=1, padding=5))
@@ -45,7 +64,12 @@ class SportsBetApp(toga.App):
             style=Pack(flex=1),
         )
         root = toga.Box(
-            children=[self.refresh_button, self.status_label, results_scroll],
+            children=[
+                self.league_selection,
+                self.refresh_button,
+                self.status_label,
+                results_scroll,
+            ],
             style=Pack(direction=COLUMN, flex=1, padding=5),
         )
 
@@ -57,9 +81,11 @@ class SportsBetApp(toga.App):
         log.info("Refresh triggered")
         self.status_label.text = "Loading..."
         self.refresh_button.enabled = False
+        self.league_selection.enabled = False
         self.results_box.remove(*self.results_box.children)
         try:
-            recommendations = await asyncio.to_thread(self._load_recommendations)
+            leagues = LEAGUE_OPTIONS[self.league_selection.value]
+            recommendations = await asyncio.to_thread(self._load_recommendations, leagues)
         except Exception:
             log.exception("Failed to refresh recommendations")
             self.status_label.text = "Failed to load games. Check your connection and try again."
@@ -67,17 +93,18 @@ class SportsBetApp(toga.App):
             self._render(recommendations)
         finally:
             self.refresh_button.enabled = True
+            self.league_selection.enabled = True
 
-    def _load_recommendations(self):
-        fpi_cache = self._load_fpi_cache()
+    def _load_recommendations(self, leagues):
+        fpi_cache = self._load_fpi_cache(leagues)
         games = []
-        for league in LEAGUES:
+        for league in leagues:
             raw = self.client.scoreboard(league)
             league_games = parse_games_from_scoreboard(raw, league)
             games.extend(league_games)
             week = league_games[0].week if league_games else None
             self._persist_full_league_stats(league, week, fpi_cache.get(league, {}))
-        log.info("Fetched %d game(s) across %d league(s)", len(games), len(LEAGUES))
+        log.info("Fetched %d game(s) across %d league(s)", len(games), len(leagues))
         self._apply_fpi(games, fpi_cache)
         enrich_games_with_team_stats(self.client, games, cache=self._team_stats_cache)
         self._persist_history(games)
@@ -104,12 +131,12 @@ class SportsBetApp(toga.App):
             self.history.save_team_stat_snapshot(game.league, game.home_team, week)
             self.history.save_team_stat_snapshot(game.league, game.away_team, week)
 
-    def _load_fpi_cache(self):
+    def _load_fpi_cache(self, leagues):
         fpi_cache = {}
-        for league in LEAGUES:
+        for league in leagues:
             raw = self.client.fpi(league)
             fpi_cache[league] = {
-                entry.get("team", {}).get("id"): entry.get("fpi")
+                entry.get("team", {}).get("id"): _extract_fpi(entry)
                 for entry in raw.get("teams", [])
             } if raw else {}
             log.debug("Loaded %d FPI rating(s) for league=%s", len(fpi_cache[league]), league)
@@ -134,7 +161,8 @@ class SportsBetApp(toga.App):
         for text, flex in (
             ("Home Team", 0.23),
             ("Away Team", 0.23),
-            ("Recommendation", 0.54),
+            ("Recommendation", 0.39),
+            ("Odds", 0.15),
         ):
             header.add(
                 toga.Label(text, style=Pack(flex=flex, font_weight="bold", padding=3))
@@ -149,8 +177,9 @@ class SportsBetApp(toga.App):
                 (
                     f"[{rec.bet_type.upper()}] {rec.selection} - {rec.probability:.0%}\n"
                     f"{rec.reasoning}",
-                    0.54,
+                    0.39,
                 ),
+                (f"{rec.odds:+d}" if rec.odds is not None else "N/A", 0.15),
             )
             for text, flex in cells:
                 row.add(toga.Label(text, style=Pack(flex=flex, padding=3)))

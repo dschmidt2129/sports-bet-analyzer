@@ -25,8 +25,9 @@ UI that can be packaged for Android with Briefcase.
   those JSON weights and rank upcoming games by predicted probability. Until
   enough in-season history accumulates, recommendations fall back to an
   FPI-differential estimate.
-- `app/main.py` is the Toga UI: tap Refresh to fetch this week's NFL/NCAAF
-  games and show bets above a confidence threshold.
+- `app/main.py` is the Toga UI: choose NFL, college football, or all leagues,
+  then tap Refresh to show bets above a confidence threshold with their
+  available market odds.
 
 ## Desktop setup
 

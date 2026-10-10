@@ -23,6 +23,10 @@ class OddsLine:
     over_under: Optional[float] = None
     home_moneyline: Optional[int] = None
     away_moneyline: Optional[int] = None
+    home_spread_odds: Optional[int] = None
+    away_spread_odds: Optional[int] = None
+    over_odds: Optional[int] = None
+    under_odds: Optional[int] = None
 
 
 @dataclass
@@ -59,3 +63,4 @@ class PredictionResult:
     reasoning: str
     home_team_name: str = ""
     away_team_name: str = ""
+    odds: Optional[int] = None

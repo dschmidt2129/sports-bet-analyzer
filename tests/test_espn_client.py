@@ -31,8 +31,10 @@ def _event(with_odds=True, completed=True):
                 "provider": {"name": "ESPN BET"},
                 "spread": -3.5,
                 "overUnder": 44.5,
-                "homeTeamOdds": {"moneyLine": -180},
-                "awayTeamOdds": {"moneyLine": 150},
+                "homeTeamOdds": {"moneyLine": -180, "spreadOdds": -110},
+                "awayTeamOdds": {"moneyLine": 150, "spreadOdds": -105},
+                "overOdds": -115,
+                "underOdds": -105,
             }
         ]
     return {"id": "401", "date": "2026-09-21T17:00Z", "week": {"number": 3}, "competitions": [competition]}
@@ -54,6 +56,10 @@ def test_parse_games_from_scoreboard_basic():
     assert game.odds.home_spread == -3.5
     assert game.odds.over_under == 44.5
     assert game.odds.home_moneyline == -180
+    assert game.odds.home_spread_odds == -110
+    assert game.odds.away_spread_odds == -105
+    assert game.odds.over_odds == -115
+    assert game.odds.under_odds == -105
 
 
 def test_parse_games_skips_malformed_event():
