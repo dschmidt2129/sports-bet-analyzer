@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS team_stat_snapshots (
     turnover_margin REAL,
     win_pct REAL,
     fpi REAL,
+    source TEXT NOT NULL DEFAULT 'legacy',
+    captured_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (league, team_id, as_of_week)
 );
 """
@@ -45,6 +47,24 @@ class HistoryStore:
         log.info("Opening history store at %s", db_path)
         with closing(sqlite3.connect(self.db_path)) as conn:
             conn.executescript(SCHEMA)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(team_stat_snapshots)")}
+            if "source" not in columns:
+                conn.execute(
+                    "ALTER TABLE team_stat_snapshots ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy'"
+                )
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(team_stat_snapshots)")}
+            if "captured_at" not in columns:
+                conn.execute("ALTER TABLE team_stat_snapshots ADD COLUMN captured_at TEXT")
+                conn.execute(
+                    """
+                    UPDATE team_stat_snapshots
+                    SET captured_at = CASE
+                        WHEN source = 'live' THEN CURRENT_TIMESTAMP
+                        ELSE '1970-01-01 00:00:00'
+                    END
+                    WHERE captured_at IS NULL
+                    """
+                )
             conn.commit()
 
     def save_game_result(self, game):
@@ -79,7 +99,7 @@ class HistoryStore:
             )
             conn.commit()
 
-    def save_team_stat_snapshot(self, league, team_stats, as_of_week):
+    def save_team_stat_snapshot(self, league, team_stats, as_of_week, source="unverified"):
         log.debug(
             "Saving team stat snapshot league=%s team_id=%s week=%s", league, team_stats.team_id, as_of_week
         )
@@ -88,8 +108,9 @@ class HistoryStore:
                 """
                 INSERT INTO team_stat_snapshots (
                     league, team_id, as_of_week, points_per_game, points_allowed_per_game,
-                    yards_per_play, yards_allowed_per_play, turnover_margin, win_pct, fpi
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    yards_per_play, yards_allowed_per_play, turnover_margin, win_pct, fpi,
+                    source, captured_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(league, team_id, as_of_week) DO UPDATE SET
                     points_per_game=excluded.points_per_game,
                     points_allowed_per_game=excluded.points_allowed_per_game,
@@ -97,7 +118,10 @@ class HistoryStore:
                     yards_allowed_per_play=excluded.yards_allowed_per_play,
                     turnover_margin=excluded.turnover_margin,
                     win_pct=excluded.win_pct,
-                    fpi=excluded.fpi
+                    fpi=excluded.fpi,
+                    source=excluded.source,
+                    captured_at=excluded.captured_at
+                WHERE datetime(team_stat_snapshots.captured_at) <= datetime('now', '-3 days')
                 """,
                 (
                     league,
@@ -110,6 +134,7 @@ class HistoryStore:
                     team_stats.turnover_margin,
                     team_stats.win_pct,
                     team_stats.fpi,
+                    source,
                 ),
             )
             conn.commit()
@@ -123,17 +148,19 @@ class HistoryStore:
             log.debug("Loaded %d completed game(s) for league=%s", len(rows), league)
             return [dict(row) for row in rows]
 
-    def team_stat_snapshot(self, league, team_id, as_of_week):
+    def team_stat_snapshot(self, league, team_id, as_of_week, source=None):
         with closing(sqlite3.connect(self.db_path)) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
+            query = """
                 SELECT * FROM team_stat_snapshots
                 WHERE league = ? AND team_id = ? AND as_of_week <= ?
-                ORDER BY as_of_week DESC LIMIT 1
-                """,
-                (league, team_id, as_of_week),
-            ).fetchone()
+            """
+            params = [league, team_id, as_of_week]
+            if source is not None:
+                query += " AND source = ?"
+                params.append(source)
+            query += " ORDER BY as_of_week DESC LIMIT 1"
+            row = conn.execute(query, params).fetchone()
             if row is None:
                 log.debug("No stat snapshot found league=%s team_id=%s as_of_week=%s", league, team_id, as_of_week)
             return dict(row) if row else None
