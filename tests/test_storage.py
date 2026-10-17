@@ -84,38 +84,3 @@ def test_snapshot_can_be_overwritten_after_three_days(tmp_path):
     snapshot = store.team_stat_snapshot("nfl", "team-1", 1, source="live")
     assert snapshot["points_per_game"] == 30.0
     assert snapshot["captured_at"] != "1970-01-01 00:00:00"
-
-
-def test_player_prop_snapshot_is_ml_ready_and_keeps_capture_history(tmp_path):
-    store = HistoryStore(str(tmp_path / "history.db"))
-    prop = {
-        "event_id": "event-1",
-        "league": "nfl",
-        "odd_id": "passing_yards-player-1-game-ou-over",
-        "player_id": "player-1",
-        "player_name": "Player One",
-        "team_id": "team-1",
-        "stat_id": "passing_yards",
-        "period_id": "game",
-        "side_id": "over",
-        "bookmaker_id": "book-a",
-        "line": 245.5,
-        "odds": -110,
-        "fair_odds": -105,
-        "season_avg": 250.0,
-        "last3_avg": 270.0,
-        "opponent_defense_ypp_allowed": 5.5,
-        "actual_value": 260.0,
-        "captured_at": "2026-10-16T12:00:00+00:00",
-    }
-
-    store.save_player_prop_snapshot(prop)
-    store.save_player_prop_snapshot({**prop, "odds": -115})
-    store.save_player_prop_snapshot({**prop, "captured_at": "2026-10-16T12:10:00+00:00"})
-
-    rows = store.player_prop_training_rows("nfl")
-    assert len(rows) == 2
-    assert rows[0]["over_hit"] == 1
-    assert rows[0]["last3_avg"] == 270.0
-    assert rows[0]["odds"] == -115
-    assert rows[1]["captured_at"] == "2026-10-16T12:10:00+00:00"

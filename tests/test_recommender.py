@@ -23,7 +23,7 @@ def _game(home_fpi=10.0, away_fpi=0.0, home_spread=-3.5, over_under=45.0):
     return Game(game_id="g1", league="nfl", date="2026-09-21", home_team=home, away_team=away, odds=odds)
 
 
-def test_recommend_for_game_cold_start_uses_fpi_fallback(tmp_path):
+def test_recommend_for_game_cold_start_uses_market_anchored_fpi_fallback(tmp_path):
     predictor = Predictor(weights_dir=tmp_path)
     game = _game(home_fpi=20.0, away_fpi=0.0)
 
@@ -36,6 +36,58 @@ def test_recommend_for_game_cold_start_uses_fpi_fallback(tmp_path):
         assert 0.5 <= r.probability <= 1.0
         assert r.home_team_name == "Home"
         assert r.away_team_name == "Away"
+        assert "blended with market" in r.reasoning
+
+
+def test_cold_start_uses_current_season_scoring_stats(tmp_path):
+    predictor = Predictor(weights_dir=tmp_path)
+    game = _game(home_fpi=None, away_fpi=None)
+    game.home_team.points_per_game = 30.0
+    game.home_team.points_allowed_per_game = 18.0
+    game.away_team.points_per_game = 18.0
+    game.away_team.points_allowed_per_game = 30.0
+
+    results = recommend_for_game(game, predictor, threshold=0.5)
+
+    spread_result = next(result for result in results if result.bet_type == "spread")
+    assert spread_result.probability > 0.5
+    assert "season-stat/FPI estimate" in spread_result.reasoning
+
+
+def test_cold_start_can_recommend_totals_from_season_stats(tmp_path):
+    predictor = Predictor(weights_dir=tmp_path)
+    game = _game(home_fpi=None, away_fpi=None, home_spread=-3.5, over_under=39.0)
+    game.home_team.points_per_game = 30.0
+    game.home_team.points_allowed_per_game = 20.0
+    game.away_team.points_per_game = 25.0
+    game.away_team.points_allowed_per_game = 21.0
+    game.odds.home_spread_odds = -110
+    game.odds.away_spread_odds = -110
+    game.odds.home_moneyline = -110
+    game.odds.away_moneyline = -110
+    game.odds.over_odds = -110
+    game.odds.under_odds = -110
+
+    results = recommend_for_game(game, predictor, threshold=0.5)
+
+    total_result = next(result for result in results if result.bet_type == "total")
+    assert total_result.selection.startswith("Over")
+    assert "season-stat/FPI estimate" in total_result.reasoning
+
+
+def test_cold_start_abstains_without_market_or_season_inputs(tmp_path):
+    predictor = Predictor(weights_dir=tmp_path)
+    game = _game(home_fpi=None, away_fpi=None)
+    game.odds = None
+
+    assert recommend_for_game(game, predictor) == []
+
+
+def test_cold_start_abstains_when_edge_does_not_clear_threshold(tmp_path):
+    predictor = Predictor(weights_dir=tmp_path)
+    game = _game(home_fpi=0.0, away_fpi=0.0)
+
+    assert recommend_for_game(game, predictor) == []
 
 
 def test_recommend_for_game_uses_trained_model_when_available(tmp_path):

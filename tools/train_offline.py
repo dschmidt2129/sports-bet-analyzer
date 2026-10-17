@@ -16,9 +16,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from sports_bet_analyzer import features as feat  # noqa: E402
-from sports_bet_analyzer.models import TeamStats  # noqa: E402
-from sports_bet_analyzer.storage import HistoryStore  # noqa: E402
+from sports_bet_analyzer import features as feat
+from sports_bet_analyzer.models import TeamStats
+from sports_bet_analyzer.storage import HistoryStore
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +34,8 @@ def build_spread_dataset(store, league):
         if game["home_spread"] is None or game["home_score"] is None:
             log.debug("Skipping game_id=%s: missing spread or score", game["game_id"])
             continue
-        home_snap = store.team_stat_snapshot(league, game["home_team_id"], game["week"] or 0)
-        away_snap = store.team_stat_snapshot(league, game["away_team_id"], game["week"] or 0)
+        home_snap = store.team_stat_snapshot(league, game["home_team_id"], game["week"] or 0, source="live")
+        away_snap = store.team_stat_snapshot(league, game["away_team_id"], game["week"] or 0, source="live")
         if not home_snap or not away_snap:
             log.debug("Skipping game_id=%s: missing stat snapshot", game["game_id"])
             continue

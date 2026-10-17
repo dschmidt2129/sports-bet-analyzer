@@ -102,6 +102,8 @@ python tools/backfill_history.py --league nfl --start-week 1 --end-week 3
 
 Repeat with `--league college-football` for NCAA Football. The default range is
 regular-season week 1 through the league's typical max week.
+Backfilling stores completed game results only; ESPN does not provide the
+historical weekly team stats needed to create reliable training snapshots.
 
 ## Training the model
 
@@ -113,7 +115,16 @@ python tools/train_offline.py --league nfl
 
 This writes `src/sports_bet_analyzer/model_weights/spread.json`, which
 `predictor.py` picks up automatically. Repeat per league and bet type as data
-accumulates.
+accumulates. Training uses snapshots collected by the live service; legacy
+snapshots without verified provenance are ignored.
+Team snapshots record their capture time and are not overwritten by refreshes
+for three days, preserving the first snapshot in that window.
+
+When trained weights are unavailable, recommendations use current scoring
+stats and FPI blended with de-vigged market prices. This cold-start estimate is
+a conservative heuristic, not a calibrated model; its weights and scoring
+scales should be evaluated with walk-forward historical data before relying on
+its probabilities.
 
 ## Data source limitations
 

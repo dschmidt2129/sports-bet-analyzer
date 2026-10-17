@@ -1,6 +1,7 @@
 import pytest
 
 from sports_bet_analyzer.espn_client import (
+    ESPNClient,
     apply_team_season_stats,
     enrich_games_with_team_stats,
     fetch_all_league_team_stats,
@@ -66,6 +67,24 @@ def test_parse_games_skips_malformed_event():
     raw = {"events": [{"id": "bad"}]}
     games = parse_games_from_scoreboard(raw, "nfl")
     assert games == []
+
+
+def test_scoreboard_returns_none_when_response_is_unavailable():
+    client = ESPNClient()
+    client._get = lambda *args, **kwargs: {}
+
+    assert client.scoreboard("nfl", week=1) is None
+
+
+def test_scoreboard_preserves_successful_empty_week():
+    client = ESPNClient()
+    client._get = lambda *args, **kwargs: {"events": []}
+
+    assert client.scoreboard("nfl", week=1) == {"events": []}
+
+
+def test_parse_games_from_unavailable_scoreboard():
+    assert parse_games_from_scoreboard(None, "nfl") == []
 
 
 def test_parse_odds_from_competition_missing_odds():
