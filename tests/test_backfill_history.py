@@ -62,7 +62,7 @@ def _event(event_id, completed=True):
     }
 
 
-def test_backfill_saves_only_completed_games_across_weeks():
+def test_backfill_saves_only_completed_games_without_historical_snapshots():
     games_by_week = {
         1: {"events": [_event("g1", completed=True)]},
         2: {"events": [_event("g2", completed=False)]},
@@ -75,15 +75,18 @@ def test_backfill_saves_only_completed_games_across_weeks():
     assert total_saved == 1
     assert store.saved_games == ["g1"]
     assert client.requested_weeks == [1, 2]
-    assert len(store.saved_snapshots) == 4  # 2 teams x 2 weeks
+    assert store.saved_snapshots == []
 
 
-def test_backfill_persists_full_league_coverage_including_bye_teams():
-    games_by_week = {1: {"events": [_event("g1", completed=True)]}}
+def test_backfill_skips_failed_scoreboard_without_writing_snapshots():
+    games_by_week = {
+        1: None,
+        2: {"events": [_event("g2", completed=True)]},
+    }
     client = FakeClient(games_by_week, league_teams=["1", "2", "3"])
     store = FakeStore()
 
-    backfill(client, store, "nfl", start_week=1, end_week=1, delay_seconds=0)
+    backfill(client, store, "nfl", start_week=1, end_week=2, delay_seconds=0)
 
-    snapshotted_team_ids = {team_id for team_id, _ in store.saved_snapshots}
-    assert snapshotted_team_ids == {"1", "2", "3"}
+    assert store.saved_games == ["g2"]
+    assert store.saved_snapshots == []

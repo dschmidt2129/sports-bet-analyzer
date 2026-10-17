@@ -6,6 +6,7 @@ calls are defensive: on failure they log a warning and return an empty result
 instead of raising, so a single broken endpoint doesn't crash the app.
 """
 import logging
+import re
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -21,6 +22,7 @@ CORE_BASE = "https://sports.core.api.espn.com/v2/sports/football/leagues"
 LEAGUES = ("nfl", "college-football")
 
 _DEFAULT_TIMEOUT = 10
+_FBS_GROUP = 80
 
 # ESPN's team-statistics response doesn't document exact stat names, so each
 # metric is looked up by trying several known aliases in order.
@@ -36,6 +38,7 @@ class ESPNClient:
     def __init__(self, session=None, timeout=_DEFAULT_TIMEOUT):
         self.session = session or _build_session()
         self.timeout = timeout
+        self.not_found_count = 0
 
     def _get(self, url, params=None):
         log.debug("GET %s params=%s", url, params)
@@ -45,6 +48,11 @@ class ESPNClient:
             data = resp.json()
             log.debug("GET %s -> status=%s", url, resp.status_code)
             return data
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                self.not_found_count += 1
+            log.warning("ESPN request failed: %s params=%s", url, params, exc_info=True)
+            return {}
         except requests.RequestException:
             log.warning("ESPN request failed: %s params=%s", url, params, exc_info=True)
             return {}
@@ -54,10 +62,15 @@ class ESPNClient:
         params = {"limit": limit}
         if week is not None:
             params["week"] = week
+        if groups is None and league == "college-football":
+            groups = _FBS_GROUP  # non-FBS teams (FCS/D-II/D-III) have no team-statistics page (404)
         if groups is not None:
             params["groups"] = groups
         raw = self._get(f"{BASE}/{league}/scoreboard", params=params)
-        log.info("Scoreboard league=%s returned %d event(s)", league, len(raw.get("events", [])))
+        if not isinstance(raw, dict) or not isinstance(raw.get("events"), list):
+            log.warning("Scoreboard unavailable or malformed league=%s week=%s", league, week)
+            return None
+        log.info("Scoreboard league=%s returned %d event(s)", league, len(raw["events"]))
         return raw
 
     def summary(self, league, event_id):
@@ -66,7 +79,36 @@ class ESPNClient:
 
     def teams(self, league):
         log.info("Fetching teams league=%s", league)
-        return self._get(f"{BASE}/{league}/teams")
+        if league != "college-football":
+            return self._get(f"{BASE}/{league}/teams")
+        # The site /teams endpoint ignores `groups` and mixes in FCS/D-II/D-III teams that have no stats page.
+        raw = self._get(f"{BASE}/{league}/teams", params={"limit": 1000})
+        fbs_ids = self._fbs_team_ids(league, raw)
+        if not fbs_ids:
+            log.warning("FBS team lookup failed; returning no teams rather than non-FBS teams that 404")
+            return {}
+        try:
+            teams = raw["sports"][0]["leagues"][0]["teams"]
+            raw["sports"][0]["leagues"][0]["teams"] = [t for t in teams if t.get("team", {}).get("id") in fbs_ids]
+        except (KeyError, IndexError, TypeError):
+            log.warning("Malformed teams response", exc_info=True)
+            return {}
+        return raw
+
+    def _fbs_team_ids(self, league, teams_raw):
+        try:
+            year = teams_raw["sports"][0]["leagues"][0]["season"]["year"]
+        except (KeyError, IndexError, TypeError):
+            return set()
+        data = self._get(
+            f"{CORE_BASE}/{league}/seasons/{year}/types/2/groups/{_FBS_GROUP}/teams", params={"limit": 200}
+        )
+        ids = set()
+        for item in data.get("items", []) if isinstance(data, dict) else []:
+            match = re.search(r"/teams/(\d+)", item.get("$ref", ""))
+            if match:
+                ids.add(match.group(1))
+        return ids
 
     def team_statistics(self, league, team_id):
         log.info("Fetching team statistics league=%s team_id=%s", league, team_id)
@@ -93,12 +135,15 @@ def _build_session():
 
 def parse_games_from_scoreboard(raw, league):
     games = []
-    for event in raw.get("events", []):
+    events = raw.get("events", []) if isinstance(raw, dict) else []
+    if not isinstance(events, list):
+        return games
+    for event in events:
         try:
             games.append(_parse_event(event, league))
         except (KeyError, IndexError, TypeError):
             log.warning("Skipping malformed scoreboard event id=%s", event.get("id"), exc_info=True)
-    log.debug("Parsed %d game(s) from %d scoreboard event(s)", len(games), len(raw.get("events", [])))
+    log.debug("Parsed %d game(s) from %d scoreboard event(s)", len(games), len(events))
     return games
 
 
@@ -208,7 +253,9 @@ def _flatten_into(node, flat):
             for key in (node.get("name"), node.get("abbreviation")):
                 if key:
                     flat[key] = node["value"]
-        for value in node.values():
+        for key, value in node.items():
+            if key == "opponent":  # opponent splits reuse the team's stat names and would overwrite them
+                continue
             _flatten_into(value, flat)
     elif isinstance(node, list):
         for item in node:
@@ -281,7 +328,8 @@ def fetch_all_league_team_stats(client, league, cache=None):
     and can be shared with it to avoid re-fetching the same team twice.
     """
     cache = cache if cache is not None else {}
-    teams = parse_teams(client.teams(league), league)
+    raw_teams = client.teams(league)
+    teams = parse_teams(raw_teams, league) if raw_teams else []
     log.info("Fetched %d team(s) for full-league coverage league=%s", len(teams), league)
 
     for team in teams:

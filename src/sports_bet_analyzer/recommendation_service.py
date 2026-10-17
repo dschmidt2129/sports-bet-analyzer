@@ -35,18 +35,32 @@ class RecommendationService:
         games = []
         for league in leagues:
             raw = self.client.scoreboard(league)
+            if raw is None:
+                log.warning("Skipping league history persistence after scoreboard failure league=%s", league)
+                continue
             league_games = parse_games_from_scoreboard(raw, league)
             games.extend(league_games)
             week = league_games[0].week if league_games else None
             self._persist_full_league_stats(league, week, fpi_cache.get(league, {}))
         log.info("Fetched %d game(s) across %d league(s)", len(games), len(leagues))
         self._apply_fpi(games, fpi_cache)
+        not_found_before = self._not_found_count()
         enrich_games_with_team_stats(self.client, games, cache=self._team_stats_cache)
-        self._persist_history(games)
+        if self._not_found_count() != not_found_before:
+            log.warning("Skipping history persistence after ESPN 404 during team stats fetch")
+        else:
+            self._persist_history(games)
         return rank_games(games, self.predictor)
 
+    def _not_found_count(self):
+        return getattr(self.client, "not_found_count", 0)
+
     def _persist_full_league_stats(self, league, week, fpi_ratings):
+        not_found_before = self._not_found_count()
         league_teams = fetch_all_league_team_stats(self.client, league, cache=self._team_stats_cache)
+        if self._not_found_count() != not_found_before:
+            log.warning("Skipping full-league persistence after ESPN 404 league=%s", league)
+            return
         log.info(
             "Persisting full-league stat snapshot league=%s week=%s (%d team(s))",
             league,
@@ -55,7 +69,7 @@ class RecommendationService:
         )
         for team in league_teams.values():
             team.fpi = fpi_ratings.get(team.team_id, team.fpi)
-            self.history.save_team_stat_snapshot(league, team, week or 0)
+            self.history.save_team_stat_snapshot(league, team, week or 0, source="live")
 
     def _persist_history(self, games):
         log.debug("Persisting history for %d game(s)", len(games))
@@ -63,8 +77,8 @@ class RecommendationService:
         for game in games:
             self.history.save_game_result(game)
             week = game.week or 0
-            self.history.save_team_stat_snapshot(game.league, game.home_team, week)
-            self.history.save_team_stat_snapshot(game.league, game.away_team, week)
+            self.history.save_team_stat_snapshot(game.league, game.home_team, week, source="live")
+            self.history.save_team_stat_snapshot(game.league, game.away_team, week, source="live")
 
     def _load_fpi_cache(self, leagues):
         fpi_cache = {}

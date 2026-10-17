@@ -5,7 +5,6 @@ import { fetchRecommendations } from "./api";
 import type { League, Recommendation, RecommendationsResponse } from "./types";
 
 const leagueOptions: { value: League; label: string }[] = [
-  { value: "all", label: "All leagues" },
   { value: "nfl", label: "NFL" },
   { value: "college-football", label: "College football" },
 ];
@@ -63,7 +62,7 @@ function LoadingCards() {
 }
 
 export default function App() {
-  const [league, setLeague] = useState<League>("all");
+  const [league, setLeague] = useState<League>("nfl");
   const [data, setData] = useState<RecommendationsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
