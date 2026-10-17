@@ -21,6 +21,39 @@ TOTAL_FEATURES = (
     "over_under_line",
 )
 
+PLAYER_PROP_BET_TYPE = "player_prop"
+PLAYER_PROP_FEATURES = (
+    "season_edge",
+    "recent_edge",
+    "trend_edge",
+    "opponent_defense",
+    "market_prob",
+    "is_over",
+)
+
+
+def american_to_probability(odds):
+    if odds is None or odds == 0:
+        return None
+    return 100.0 / (odds + 100.0) if odds > 0 else -odds / (-odds + 100.0)
+
+
+def player_prop_hit_features(quote):
+    """Features for P(the quoted side hits); None when player averages or a line are missing."""
+    line, season, last3 = quote.get("line"), quote.get("season_avg"), quote.get("last3_avg")
+    if not line or season is None or last3 is None:
+        return None
+    side = 1.0 if quote.get("side_id") == "over" else -1.0
+    market_prob = american_to_probability(quote.get("odds"))
+    return {
+        "season_edge": side * (season - line) / line,
+        "recent_edge": side * (last3 - line) / line,
+        "trend_edge": side * (last3 - season) / line,
+        "opponent_defense": side * (quote.get("opponent_defense_ypp_allowed") or 0.0),
+        "market_prob": market_prob if market_prob is not None else 0.5,
+        "is_over": 1.0 if side > 0 else 0.0,
+    }
+
 
 def team_differential_features(home, away):
     """Home-minus-away feature vector used for spread/moneyline models."""

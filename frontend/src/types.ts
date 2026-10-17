@@ -24,6 +24,7 @@ export interface PlayerPropQuote {
   player_id: string;
   player_name: string;
   team_id: string | null;
+  opponent_team_id: string | null;
   stat_id: string;
   period_id: string;
   side_id: "over" | "under";
@@ -31,6 +32,7 @@ export interface PlayerPropQuote {
   line: number;
   odds: number;
   fair_odds: number | null;
+  probability: number;
   captured_at: string;
 }
 

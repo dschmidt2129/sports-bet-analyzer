@@ -52,7 +52,7 @@ function PlayerPropRow({ quote, index }: { quote: PlayerPropQuote; index: number
     <article className="prop-row" style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}>
       <div className="prop-player">
         <strong>{quote.player_name}</strong>
-        <span>{teamLabel(quote.team_id)} · {quote.period_id === "game" ? "Full game" : quote.period_id}</span>
+        <span>{teamLabel(quote.team_id)}{quote.opponent_team_id && ` vs ${teamLabel(quote.opponent_team_id)}`} · {quote.period_id === "game" ? "Full game" : quote.period_id}</span>
       </div>
       <div className="prop-market">
         <span className="market-tag">{marketLabel(quote.stat_id)}</span>
@@ -64,6 +64,10 @@ function PlayerPropRow({ quote, index }: { quote: PlayerPropQuote; index: number
         <span>{bookmakerLabel(quote.bookmaker_id)}</span>
         <strong>{formatOdds(quote.odds)}</strong>
       </div>
+      <span className="confidence">
+        <Activity size={14} aria-hidden="true" />
+        {Math.round(quote.probability * 100)}% to hit
+      </span>
     </article>
   );
 }
@@ -119,6 +123,7 @@ export default function App() {
   const [propsError, setPropsError] = useState<string | null>(null);
   const [playerSearch, setPlayerSearch] = useState("");
   const [marketFilter, setMarketFilter] = useState("all");
+  const [sideFilter, setSideFilter] = useState<"all" | "over" | "under">("all");
   const [refreshCount, setRefreshCount] = useState(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -162,9 +167,10 @@ export default function App() {
   const quotes = propData?.props ?? [];
   const visibleQuotes = quotes.filter((quote) => {
     const matchesMarket = marketFilter === "all" || quote.stat_id === marketFilter;
+    const matchesSide = sideFilter === "all" || quote.side_id === sideFilter;
     const query = playerSearch.trim().toLowerCase();
     const matchesPlayer = !query || `${quote.player_name} ${quote.team_id ?? ""}`.toLowerCase().includes(query);
-    return matchesMarket && matchesPlayer;
+    return matchesMarket && matchesSide && matchesPlayer;
   });
   const marketOptions = [...new Set(quotes.map((quote) => quote.stat_id))].sort();
   const isLoading = activeTab === "props" ? propsLoading : loading;
@@ -274,6 +280,14 @@ export default function App() {
                   {marketOptions.map((market) => (
                     <option key={market} value={market}>{marketLabel(market)}</option>
                   ))}
+                </select>
+              </label>
+              <label className="market-filter">
+                <span className="sr-only">Filter by over or under</span>
+                <select value={sideFilter} onChange={(event) => setSideFilter(event.target.value as "all" | "over" | "under")}>
+                  <option value="all">Over &amp; under</option>
+                  <option value="over">Over</option>
+                  <option value="under">Under</option>
                 </select>
               </label>
             </div>

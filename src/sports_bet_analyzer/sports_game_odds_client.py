@@ -21,7 +21,7 @@ class SportsGameOddsClient:
         self.session = session or requests.Session()
         self.timeout = timeout
 
-    def events(self, league_id="NFL", limit=100, finalized=None):
+    def events(self, league_id="NFL", limit=100, finalized=None, starts_after=None, starts_before=None):
         """Fetch events with odds; an empty list is returned on configuration/API errors."""
         if not self.api_key:
             log.warning("SPORTSGAMEODDS_API_KEY is not configured; skipping player props")
@@ -35,6 +35,10 @@ class SportsGameOddsClient:
         }
         if finalized is not None:
             params["finalized"] = str(finalized).lower()
+        if starts_after is not None:
+            params["startsAfter"] = starts_after.isoformat()
+        if starts_before is not None:
+            params["startsBefore"] = starts_before.isoformat()
 
         log.info("Started SportsGameOdds odds call league=%s limit=%d", league_id, limit)
         try:
@@ -72,7 +76,9 @@ def parse_player_prop_quotes(events, league="nfl", captured_at=None):
         odds = event.get("odds") or {}
         if not event_id or not isinstance(players, dict) or not isinstance(odds, dict):
             continue
-
+        team_ids = {
+            side: ((event.get("teams") or {}).get(side) or {}).get("teamID") for side in ("home", "away")
+        }
         for odd_id, market in odds.items():
             if not isinstance(market, dict) or market.get("betTypeID") != "ou":
                 continue
@@ -90,6 +96,8 @@ def parse_player_prop_quotes(events, league="nfl", captured_at=None):
             bookmaker_quotes = market.get("byBookmaker") or {}
             if not isinstance(bookmaker_quotes, dict):
                 continue
+            team_id = player.get("teamID")
+            opponent_team_id = next((t for t in team_ids.values() if t and t != team_id), None) if team_id else None
             for bookmaker_id, bookmaker_quote in bookmaker_quotes.items():
                 if not isinstance(bookmaker_quote, dict) or not bookmaker_quote.get("available", True):
                     continue
@@ -106,6 +114,7 @@ def parse_player_prop_quotes(events, league="nfl", captured_at=None):
                         "player_id": str(player_id),
                         "player_name": str(player_name),
                         "team_id": player.get("teamID"),
+                        "opponent_team_id": opponent_team_id,
                         "stat_id": str(stat_id),
                         "period_id": str(market.get("periodID") or "game"),
                         "side_id": side_id,

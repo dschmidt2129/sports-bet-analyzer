@@ -69,7 +69,7 @@ h1, h2, p { margin: 0; }
 .market-filter select { cursor: pointer; }
 .market-filter option { background: #181d27; color: #f4f6fa; }
 .prop-list { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: #151922; }
-.prop-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(145px, .8fr) minmax(110px, .55fr); min-height: 72px; align-items: center; gap: 16px; padding: 12px 17px; border-bottom: 1px solid var(--line); animation: rise .35s both; }
+.prop-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(145px, .8fr) minmax(110px, .55fr) auto; min-height: 72px; align-items: center; gap: 16px; padding: 12px 17px; border-bottom: 1px solid var(--line); animation: rise .35s both; }
 .prop-row:last-child { border-bottom: 0; }
 .prop-player, .prop-market, .prop-bookmaker { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 5px; }
 .prop-player strong { overflow: hidden; max-width: 100%; color: #f0f2f6; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }

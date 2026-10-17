@@ -1,4 +1,5 @@
 """HTTP API for the React and Capacitor client."""
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Literal
@@ -13,6 +14,12 @@ from sports_bet_analyzer.recommendation_service import RecommendationService
 
 League = Literal["all", "nfl", "college-football"]
 LEAGUES = ("nfl", "college-football")
+
+# Uvicorn only configures its own loggers, so app INFO logs are dropped without this.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(levelname)s:     %(name)s - %(message)s",
+)
 
 
 class RecommendationResponse(BaseModel):
@@ -39,6 +46,7 @@ class PlayerPropQuoteResponse(BaseModel):
     player_id: str
     player_name: str
     team_id: str | None
+    opponent_team_id: str | None
     stat_id: str
     period_id: str
     side_id: str
@@ -46,6 +54,7 @@ class PlayerPropQuoteResponse(BaseModel):
     line: float
     odds: int
     fair_odds: int | None
+    probability: float
     captured_at: str
 
 
@@ -108,7 +117,7 @@ def get_recommendations(
 
 @app.get("/api/player-props", response_model=PlayerPropsResponse)
 def get_player_props(league: Literal["nfl", "college-football"] = Query(default="nfl")):
-    quotes = player_prop_service.load_player_props(league)
+    quotes = player_prop_service.ranked_player_props(league)
     return PlayerPropsResponse(
         league=league,
         refreshed_at=player_prop_service.last_refreshed_at or datetime.now(timezone.utc),

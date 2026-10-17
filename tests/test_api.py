@@ -87,6 +87,7 @@ def test_player_props_endpoint_returns_provider_quotes(monkeypatch):
         "player_id": "player-1",
         "player_name": "Player One",
         "team_id": "team-1",
+        "opponent_team_id": "team-2",
         "stat_id": "passing_yards",
         "period_id": "game",
         "side_id": "over",
@@ -94,11 +95,12 @@ def test_player_props_endpoint_returns_provider_quotes(monkeypatch):
         "line": 245.5,
         "odds": -110,
         "fair_odds": -105,
+        "probability": 0.51,
         "captured_at": "2026-10-16T12:00:00+00:00",
     }
     monkeypatch.setattr(
         api.player_prop_service,
-        "load_player_props",
+        "ranked_player_props",
         lambda league: requested_leagues.append(league) or [quote],
     )
 
