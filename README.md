@@ -16,6 +16,10 @@ logic.
   project configuration.
 - `src/sports_bet_analyzer/api.py` exposes recommendations at
   `/api/recommendations?league=all|nfl|college-football`.
+- `player_prop_service.py` fetches and caches sportsbook player-prop quotes from
+  SportsGameOdds at `/api/player-props?league=nfl`.
+- `storage.py` records timestamped player-prop quotes and eventual outcomes in
+  `player_prop_snapshots` for future model training.
 - `recommendation_service.py` coordinates the existing ESPN client, predictor,
   recommender, and SQLite history store.
 - `espn_client.py` fetches ESPN scores, team stats, odds, and FPI ratings.
@@ -37,6 +41,24 @@ with `--host 0.0.0.0` and configure `VITE_API_BASE_URL` in `frontend/.env.local`
 to an HTTPS URL reachable from that device. Do not expose an unencrypted API
 port directly to the public internet. For a separately hosted web UI, set
 `ALLOWED_ORIGINS` to a comma-separated list of its exact origins.
+
+To enable player props, put your SportsGameOdds API key in the project-root
+`.env` file. It is ignored by Git and loaded automatically when the backend
+starts. The key is optional; without it, `/api/player-props` returns an empty
+list and the rest of the API continues to work. To recreate the local file from
+the template in PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Then replace the blank `SPORTSGAMEODDS_API_KEY` value in `.env`. An environment
+variable already set by the shell takes precedence over the file.
+
+Player-prop responses are cached for ten minutes to match the free tier's update
+cadence and reduce API usage. Quotes are saved with capture timestamps; only
+settled rows with the required player-stat features are returned by the
+training-data query.
 
 ## Run the web UI
 

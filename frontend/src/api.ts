@@ -1,4 +1,4 @@
-import type { League, RecommendationsResponse } from "./types";
+import type { League, PlayerPropsResponse, RecommendationsResponse } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ?? "";
 
@@ -14,4 +14,15 @@ export async function fetchRecommendations(
     throw new Error(`The recommendations service returned HTTP ${response.status}.`);
   }
   return response.json() as Promise<RecommendationsResponse>;
+}
+
+export async function fetchPlayerProps(signal?: AbortSignal): Promise<PlayerPropsResponse> {
+  const url = new URL(`${baseUrl}/api/player-props`, window.location.origin);
+  url.searchParams.set("league", "nfl");
+
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    throw new Error(`The player-props service returned HTTP ${response.status}.`);
+  }
+  return response.json() as Promise<PlayerPropsResponse>;
 }

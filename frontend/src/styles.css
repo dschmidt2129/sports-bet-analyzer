@@ -43,6 +43,10 @@ h1, h2, p { margin: 0; }
 .orbit-two { bottom: 49px; left: 59px; width: 7px; height: 7px; }
 
 .dashboard { padding: 36px 0 50px; }
+.view-tabs { display: flex; gap: 22px; margin-bottom: 30px; border-bottom: 1px solid var(--line); }
+.view-tabs button { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 2px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #8992a2; font-size: 13px; font-weight: 650; cursor: pointer; }
+.view-tabs button.active { border-bottom-color: var(--lime); color: #f4f6fa; }
+.view-tabs button:hover:not(.active) { color: #dfe4ed; }
 .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
 .subdued { color: #8992a2; }
 .section-heading h2 { margin-top: 9px; font-size: 24px; font-weight: 700; letter-spacing: -.035em; }
@@ -57,6 +61,31 @@ h1, h2, p { margin: 0; }
 .league-tabs button:hover:not(.active) { color: #dfe4ed; }
 .result-meta { display: inline-flex; align-items: center; gap: 7px; color: #a7aebb; font-size: 12px; white-space: nowrap; }
 .updated-time { color: #707989; }
+.prop-controls { display: flex; min-width: 0; gap: 9px; }
+.prop-search, .market-filter { display: flex; height: 38px; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; background: #151922; color: #8992a2; }
+.prop-search input, .market-filter select { min-width: 0; border: 0; outline: 0; background: transparent; color: #e9edf4; font: inherit; font-size: 12px; }
+.prop-search input { width: 190px; }
+.prop-search input::placeholder { color: #747d8d; }
+.market-filter select { cursor: pointer; }
+.market-filter option { background: #181d27; color: #f4f6fa; }
+.prop-list { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: #151922; }
+.prop-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(145px, .8fr) minmax(110px, .55fr); min-height: 72px; align-items: center; gap: 16px; padding: 12px 17px; border-bottom: 1px solid var(--line); animation: rise .35s both; }
+.prop-row:last-child { border-bottom: 0; }
+.prop-player, .prop-market, .prop-bookmaker { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 5px; }
+.prop-player strong { overflow: hidden; max-width: 100%; color: #f0f2f6; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.prop-player span, .prop-bookmaker span { color: #8992a2; font-size: 11px; text-transform: capitalize; }
+.prop-market { flex-direction: row; align-items: center; gap: 10px; }
+.prop-market .market-tag { flex: 0 1 auto; }
+.prop-market strong { font-size: 12px; white-space: nowrap; }
+.over-pick { color: var(--lime); }
+.under-pick { color: #ff9d77; }
+.prop-bookmaker { align-items: flex-end; }
+.prop-bookmaker strong { color: #f0f2f6; font-size: 13px; }
+.prop-skeleton span { height: 13px; border-radius: 5px; background: linear-gradient(90deg, #252b36, #303744, #252b36); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+.prop-skeleton span:first-child { width: 68%; }
+.prop-skeleton span:nth-child(2) { width: 82%; }
+.prop-skeleton span:last-child { width: 45%; justify-self: end; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .pick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .pick-card { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 15px; background: linear-gradient(145deg, #1b202a, #171b24); animation: rise .4s both; transition: border-color .2s, transform .2s; }
 .pick-card:hover { border-color: #d5fa5447; transform: translateY(-2px); }
@@ -110,6 +139,17 @@ h1, h2, p { margin: 0; }
   .toolbar { align-items: flex-start; flex-direction: column; gap: 13px; margin-top: 20px; }
   .league-tabs { width: 100%; }
   .league-tabs button { flex: 1; padding: 8px 5px; font-size: 11px; }
+  .view-tabs { gap: 17px; margin-bottom: 24px; }
+  .view-tabs button { gap: 6px; font-size: 12px; }
+  .prop-controls { width: 100%; }
+  .prop-search { flex: 1; }
+  .prop-search input { width: 100%; }
+  .market-filter select { max-width: 110px; }
+  .prop-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; padding: 13px 12px; }
+  .prop-player { grid-column: 1; }
+  .prop-market { grid-column: 1; flex-wrap: wrap; }
+  .prop-bookmaker { grid-column: 2; grid-row: 1 / span 2; }
+  .prop-market .market-tag { font-size: 9px; }
   .pick-grid { grid-template-columns: 1fr; gap: 11px; }
   .pick-card { padding: 17px; }
   .pick-selection { font-size: 19px; }

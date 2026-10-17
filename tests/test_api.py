@@ -76,3 +76,43 @@ def test_recommendations_endpoint_rejects_unknown_league():
     response = TestClient(api.app).get("/api/recommendations?league=mlb")
 
     assert response.status_code == 422
+
+
+def test_player_props_endpoint_returns_provider_quotes(monkeypatch):
+    requested_leagues = []
+    quote = {
+        "event_id": "event-1",
+        "league": "nfl",
+        "odd_id": "passing_yards-player-1-game-ou-over",
+        "player_id": "player-1",
+        "player_name": "Player One",
+        "team_id": "team-1",
+        "stat_id": "passing_yards",
+        "period_id": "game",
+        "side_id": "over",
+        "bookmaker_id": "draftkings",
+        "line": 245.5,
+        "odds": -110,
+        "fair_odds": -105,
+        "captured_at": "2026-10-16T12:00:00+00:00",
+    }
+    monkeypatch.setattr(
+        api.player_prop_service,
+        "load_player_props",
+        lambda league: requested_leagues.append(league) or [quote],
+    )
+
+    response = TestClient(api.app).get("/api/player-props?league=nfl")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["league"] == "nfl"
+    assert body["props"] == [quote]
+    assert body["refreshed_at"]
+    assert requested_leagues == ["nfl"]
+
+
+def test_player_props_endpoint_rejects_unknown_league():
+    response = TestClient(api.app).get("/api/player-props?league=mlb")
+
+    assert response.status_code == 422
