@@ -51,7 +51,13 @@ class ESPNClient:
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 404:
                 self.not_found_count += 1
-            log.warning("ESPN request failed: %s params=%s", url, params, exc_info=True)
+            log.warning(
+                "ESPN request failed: %s params=%s status=%s",
+                url,
+                params,
+                exc.response.status_code if exc.response is not None else None,
+                exc_info=True,
+            )
             return {}
         except requests.RequestException:
             log.warning("ESPN request failed: %s params=%s", url, params, exc_info=True)
@@ -116,7 +122,7 @@ class ESPNClient:
 
     def odds(self, league, event_id):
         # The scoreboard drops odds once a game finishes; the core API keeps them.
-        log.info("Fetching odds league=%s event_id=%s", league, event_id)
+        log.info("Started ESPN odds call league=%s event_id=%s", league, event_id)
         return self._get(f"{CORE_BASE}/{league}/events/{event_id}/competitions/{event_id}/odds")
 
     def fpi(self, league):
@@ -143,7 +149,10 @@ def parse_games_from_scoreboard(raw, league):
             games.append(_parse_event(event, league))
         except (KeyError, IndexError, TypeError):
             log.warning("Skipping malformed scoreboard event id=%s", event.get("id"), exc_info=True)
-    log.debug("Parsed %d game(s) from %d scoreboard event(s)", len(games), len(events))
+    with_odds = sum(1 for g in games if g.odds is not None)
+    log.info("Parsed %d game(s) league=%s, %d with odds", len(games), league, with_odds)
+    if games and not with_odds:
+        log.warning("Scoreboard league=%s returned no odds for any game", league)
     return games
 
 
@@ -220,14 +229,22 @@ def parse_odds_from_core(raw):
 
 def fill_missing_odds(client, games):
     """Fetches odds from the core API for games whose scoreboard entry had none."""
+    filled = missing = 0
+    pending = sum(1 for g in games if g.odds is None or g.odds.home_spread is None)
+    if pending:
+        log.info("Started core odds backfill for %d game(s)", pending)
     for game in games:
         if game.odds is not None and game.odds.home_spread is not None:
             continue
         odds = parse_odds_from_core(client.odds(game.league, game.game_id))
         if odds is not None:
             game.odds = odds
+            filled += 1
         else:
-            log.debug("No odds available for game_id=%s", game.game_id)
+            missing += 1
+            log.warning("No odds available league=%s game_id=%s", game.league, game.game_id)
+    if filled or missing:
+        log.info("Core odds backfill: %d filled, %d without odds", filled, missing)
 
 
 def _safe_int(value):

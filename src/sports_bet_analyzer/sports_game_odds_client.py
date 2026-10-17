@@ -36,11 +36,15 @@ class SportsGameOddsClient:
         if finalized is not None:
             params["finalized"] = str(finalized).lower()
 
-        log.info("Fetching SportsGameOdds events league=%s limit=%d", league_id, limit)
+        log.info("Started SportsGameOdds odds call league=%s limit=%d", league_id, limit)
         try:
             response = self.session.get(f"{BASE}/events", params=params, timeout=self.timeout)
             response.raise_for_status()
             payload = response.json()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            log.warning("SportsGameOdds request failed league=%s status=%s", league_id, status, exc_info=True)
+            return []
         except (requests.RequestException, ValueError):
             log.warning("SportsGameOdds request failed league=%s", league_id, exc_info=True)
             return []
@@ -49,6 +53,10 @@ class SportsGameOddsClient:
         if not isinstance(events, list):
             log.warning("SportsGameOdds response malformed league=%s", league_id)
             return []
+        if not events:
+            log.warning("SportsGameOdds returned no events league=%s", league_id)
+        else:
+            log.info("SportsGameOdds returned %d event(s) league=%s", len(events), league_id)
         return events
 
 

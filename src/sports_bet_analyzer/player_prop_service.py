@@ -32,9 +32,12 @@ class PlayerPropService:
         if cached and now - cached[0] < self.cache_ttl_seconds:
             return list(cached[1])
 
+        log.info("Started player-prop load league=%s", league)
         events = self.client.events(league_id=LEAGUE_IDS[league], limit=100)
         captured_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         quotes = parse_player_prop_quotes(events, league=league, captured_at=captured_at)
+        if not quotes:
+            log.warning("No player-prop quotes league=%s (events=%d)", league, len(events))
         for quote in quotes:
             self.history.save_player_prop_snapshot(quote)
 
