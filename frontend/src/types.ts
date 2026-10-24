@@ -65,7 +65,6 @@ export interface Parlay {
 
 export interface ParlaysResponse {
   league: League;
-  leg_count: number;
   refreshed_at: string;
-  parlays: Parlay[];
+  parlays_by_legs: Record<string, Parlay[]>;
 }

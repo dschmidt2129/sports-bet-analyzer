@@ -94,9 +94,8 @@ class ParlayResponse(BaseModel):
 
 class ParlaysResponse(BaseModel):
     league: League
-    leg_count: int
     refreshed_at: datetime
-    parlays: list[ParlayResponse]
+    parlays_by_legs: dict[int, list[ParlayResponse]]
 
 
 app = FastAPI(title="Sports Bet Analyzer API", version="1.0.0")
@@ -153,7 +152,6 @@ def get_recommendations(
 @app.get("/api/parlays", response_model=ParlaysResponse)
 def get_parlays(
     league: League = Query(default="all"),
-    legs: int = Query(default=3, ge=MIN_LEGS, le=MAX_LEGS),
     limit: int = Query(default=5, ge=1, le=10),
 ):
     selected_leagues = LEAGUES if league == "all" else (league,)
@@ -174,32 +172,35 @@ def get_parlays(
 
     return ParlaysResponse(
         league=league,
-        leg_count=legs,
         refreshed_at=datetime.now(timezone.utc),
-        parlays=[
-            ParlayResponse(
-                legs=[
-                    ParlayLegResponse(
-                        leg_id=leg.leg_id,
-                        source=leg.source,
-                        market=leg.kind if leg.kind != "prop" else (leg.stat_id or "prop"),
-                        description=leg.description,
-                        matchup=leg.matchup,
-                        probability=leg.probability,
-                        odds=leg.odds,
-                    )
-                    for leg in parlay.legs
-                ],
-                leg_count=len(parlay.legs),
-                probability=parlay.probability,
-                decimal_odds=parlay.decimal_odds,
-                american_odds=parlay.american_odds,
-                expected_value=parlay.expected_value,
-                has_correlated_legs=parlay.correlated,
-                notes=parlay.notes,
+        parlays_by_legs={
+            leg_count: [_parlay_response(parlay) for parlay in build_parlays(candidates, leg_count, limit)]
+            for leg_count in range(MIN_LEGS, MAX_LEGS + 1)
+        },
+    )
+
+
+def _parlay_response(parlay):
+    return ParlayResponse(
+        legs=[
+            ParlayLegResponse(
+                leg_id=leg.leg_id,
+                source=leg.source,
+                market=leg.kind if leg.kind != "prop" else (leg.stat_id or "prop"),
+                description=leg.description,
+                matchup=leg.matchup,
+                probability=leg.probability,
+                odds=leg.odds,
             )
-            for parlay in build_parlays(candidates, leg_count=legs, limit=limit)
+            for leg in parlay.legs
         ],
+        leg_count=len(parlay.legs),
+        probability=parlay.probability,
+        decimal_odds=parlay.decimal_odds,
+        american_odds=parlay.american_odds,
+        expected_value=parlay.expected_value,
+        has_correlated_legs=parlay.correlated,
+        notes=parlay.notes,
     )
 
 

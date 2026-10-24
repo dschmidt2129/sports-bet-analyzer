@@ -149,29 +149,26 @@ def test_parlays_endpoint_combines_game_picks_and_props(monkeypatch):
     monkeypatch.setattr(api.recommendation_service, "load_recommendations", lambda leagues: recommendations)
     monkeypatch.setattr(api.player_prop_service, "ranked_player_props", lambda league: [quote])
 
-    response = TestClient(api.app).get("/api/parlays?league=nfl&legs=2")
+    response = TestClient(api.app).get("/api/parlays?league=nfl")
 
     assert response.status_code == 200
     body = response.json()
-    assert body["leg_count"] == 2
-    parlay = body["parlays"][0]
+    assert set(body["parlays_by_legs"]) == {"2", "3", "4"}
+    assert body["parlays_by_legs"]["3"] == []
+    parlay = body["parlays_by_legs"]["2"][0]
+    assert parlay["leg_count"] == 2
     assert {leg["source"] for leg in parlay["legs"]} == {"game", "prop"}
     assert parlay["has_correlated_legs"] is True
     assert 0 < parlay["probability"] < 1
     assert parlay["notes"]
 
 
-def test_parlays_endpoint_returns_empty_list_without_enough_legs(monkeypatch):
+def test_parlays_endpoint_returns_empty_lists_without_enough_legs(monkeypatch):
     monkeypatch.setattr(api.recommendation_service, "load_recommendations", lambda leagues: [])
     monkeypatch.setattr(api.player_prop_service, "ranked_player_props", lambda league: [])
 
     response = TestClient(api.app).get("/api/parlays")
 
     assert response.status_code == 200
-    assert response.json()["parlays"] == []
-
-
-def test_parlays_endpoint_validates_leg_count():
-    assert TestClient(api.app).get("/api/parlays?legs=5").status_code == 422
-    assert TestClient(api.app).get("/api/parlays?legs=1").status_code == 422
+    assert response.json()["parlays_by_legs"] == {"2": [], "3": [], "4": []}
 

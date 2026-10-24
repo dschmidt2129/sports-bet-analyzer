@@ -1,5 +1,6 @@
 """Coordinates ESPN data collection, history persistence, and bet ranking."""
 import logging
+import time
 
 from sports_bet_analyzer.espn_client import (
     ESPNClient,
@@ -24,19 +25,40 @@ def _extract_fpi(entry):
 
 
 class RecommendationService:
-    def __init__(self, client=None, predictor=None, history=None):
+    def __init__(self, client=None, predictor=None, history=None, cache_ttl_seconds=600):
         self.client = client or ESPNClient()
         self.predictor = predictor or Predictor()
         self.history = history or HistoryStore()
+        self.cache_ttl_seconds = cache_ttl_seconds
         self._team_stats_cache = {}
+        self._recommendation_cache = {}
 
     def load_recommendations(self, leagues):
+        """Rank bets for the leagues, reusing results fetched within the cache TTL."""
+        key = tuple(leagues)
+        now = time.monotonic()
+        cached = self._recommendation_cache.get(key)
+        if cached and now - cached[0] < self.cache_ttl_seconds:
+            log.debug("Serving cached recommendations leagues=%s", key)
+            return list(cached[1])
+        results, failed = self._load_recommendations(leagues)
+        if results and not failed:
+            self._recommendation_cache[key] = (now, results)
+        else:
+            log.info("Not caching recommendations leagues=%s (empty=%s failed=%s)", key, not results, failed)
+        return list(results)
+
+    def _load_recommendations(self, leagues):
+        """Return (ranked results, whether any ESPN request failed)."""
+        failed = False
+        not_found_at_start = self._not_found_count()
         fpi_cache = self._load_fpi_cache(leagues)
         games = []
         for league in leagues:
             raw = self.client.scoreboard(league)
             if raw is None:
                 log.warning("Skipping league history persistence after scoreboard failure league=%s", league)
+                failed = True
                 continue
             league_games = parse_games_from_scoreboard(raw, league)
             games.extend(league_games)
@@ -50,7 +72,8 @@ class RecommendationService:
             log.warning("Skipping history persistence after ESPN 404 during team stats fetch")
         else:
             self._persist_history(games)
-        return rank_games(games, self.predictor)
+        failed = failed or self._not_found_count() != not_found_at_start
+        return rank_games(games, self.predictor), failed
 
     def _not_found_count(self):
         return getattr(self.client, "not_found_count", 0)

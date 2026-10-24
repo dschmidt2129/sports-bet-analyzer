@@ -19,7 +19,7 @@ logic.
 - `player_prop_service.py` fetches and caches sportsbook player-prop quotes from
   SportsGameOdds at `/api/player-props?league=nfl`.
 - `parlay.py` builds suggested 2–4 leg parlays from game picks and player props
-  at `/api/parlays?league=all|nfl|college-football&legs=2..4`. See
+  at `/api/parlays?league=all|nfl|college-football`. See
   [Suggested parlays](#suggested-parlays).
 - `storage.py` records timestamped player-prop quotes and eventual outcomes in
   `player_prop_snapshots` for future model training.
@@ -66,7 +66,10 @@ training-data query.
 ## Suggested parlays
 
 `/api/parlays` combines priced game picks and player props (props need a
-SportsGameOdds key) into the highest-probability parlays of the requested size.
+SportsGameOdds key) into the highest-probability parlays for each size from 2 to
+4 legs, returned together in `parlays_by_legs` so the UI can switch sizes without
+another request. Game recommendations and player props are each cached for ten
+minutes, so repeated parlay requests do not re-call ESPN or SportsGameOdds.
 
 - Legs from different games are treated as independent; combined odds are the
   product of the legs' decimal odds.

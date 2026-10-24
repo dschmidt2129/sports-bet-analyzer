@@ -201,14 +201,14 @@ export default function App() {
     setParlaysLoading(true);
     setParlaysError(null);
     try {
-      setParlayData(await fetchParlays(league, legCount, signal));
+      setParlayData(await fetchParlays(league, signal));
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       setParlaysError(cause instanceof Error ? cause.message : "Unable to load suggested parlays.");
     } finally {
       if (!signal?.aborted) setParlaysLoading(false);
     }
-  }, [league, legCount]);
+  }, [league]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -232,7 +232,7 @@ export default function App() {
     return matchesMarket && matchesSide && matchesPlayer;
   });
   const marketOptions = [...new Set(quotes.map((quote) => quote.stat_id))].sort();
-  const parlays = parlayData?.parlays ?? [];
+  const parlays = parlayData?.parlays_by_legs[String(legCount)] ?? [];
   const isLoading = activeTab === "props" ? propsLoading : activeTab === "parlays" ? parlaysLoading : loading;
   const activeError = activeTab === "props" ? propsError : activeTab === "parlays" ? parlaysError : error;
   const lastUpdated =
