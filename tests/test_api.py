@@ -118,3 +118,60 @@ def test_player_props_endpoint_rejects_unknown_league():
     response = TestClient(api.app).get("/api/player-props?league=mlb")
 
     assert response.status_code == 422
+
+
+def test_parlays_endpoint_combines_game_picks_and_props(monkeypatch):
+    recommendations = [
+        PredictionResult(
+            game_id="g1",
+            bet_type="total",
+            selection="Over 47.5",
+            probability=0.7,
+            reasoning="",
+            home_team_name="Kansas City Chiefs",
+            away_team_name="Buffalo Bills",
+            odds=-110,
+        )
+    ]
+    quote = {
+        "event_id": "event-1",
+        "odd_id": "passing_yards-mahomes-over",
+        "player_id": "mahomes",
+        "player_name": "Mahomes",
+        "team_id": "KANSAS_CITY_CHIEFS_NFL",
+        "opponent_team_id": "BUFFALO_BILLS_NFL",
+        "stat_id": "passing_yards",
+        "side_id": "over",
+        "line": 275.5,
+        "odds": -115,
+        "probability": 0.68,
+    }
+    monkeypatch.setattr(api.recommendation_service, "load_recommendations", lambda leagues: recommendations)
+    monkeypatch.setattr(api.player_prop_service, "ranked_player_props", lambda league: [quote])
+
+    response = TestClient(api.app).get("/api/parlays?league=nfl&legs=2")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["leg_count"] == 2
+    parlay = body["parlays"][0]
+    assert {leg["source"] for leg in parlay["legs"]} == {"game", "prop"}
+    assert parlay["has_correlated_legs"] is True
+    assert 0 < parlay["probability"] < 1
+    assert parlay["notes"]
+
+
+def test_parlays_endpoint_returns_empty_list_without_enough_legs(monkeypatch):
+    monkeypatch.setattr(api.recommendation_service, "load_recommendations", lambda leagues: [])
+    monkeypatch.setattr(api.player_prop_service, "ranked_player_props", lambda league: [])
+
+    response = TestClient(api.app).get("/api/parlays")
+
+    assert response.status_code == 200
+    assert response.json()["parlays"] == []
+
+
+def test_parlays_endpoint_validates_leg_count():
+    assert TestClient(api.app).get("/api/parlays?legs=5").status_code == 422
+    assert TestClient(api.app).get("/api/parlays?legs=1").status_code == 422
+

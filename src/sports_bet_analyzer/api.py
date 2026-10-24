@@ -9,6 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from sports_bet_analyzer.models import PredictionResult
+from sports_bet_analyzer.parlay import (
+    MAX_LEGS,
+    MIN_LEGS,
+    build_parlays,
+    leg_from_prop,
+    leg_from_recommendation,
+)
 from sports_bet_analyzer.player_prop_service import PlayerPropService
 from sports_bet_analyzer.recommendation_service import RecommendationService
 
@@ -64,6 +71,34 @@ class PlayerPropsResponse(BaseModel):
     props: list[PlayerPropQuoteResponse]
 
 
+class ParlayLegResponse(BaseModel):
+    leg_id: str
+    source: Literal["game", "prop"]
+    market: str
+    description: str
+    matchup: str
+    probability: float
+    odds: int
+
+
+class ParlayResponse(BaseModel):
+    legs: list[ParlayLegResponse]
+    leg_count: int
+    probability: float
+    decimal_odds: float
+    american_odds: int
+    expected_value: float
+    has_correlated_legs: bool
+    notes: list[str]
+
+
+class ParlaysResponse(BaseModel):
+    league: League
+    leg_count: int
+    refreshed_at: datetime
+    parlays: list[ParlayResponse]
+
+
 app = FastAPI(title="Sports Bet Analyzer API", version="1.0.0")
 allowed_origins = [
     origin.strip()
@@ -111,6 +146,59 @@ def get_recommendations(
                 odds=result.odds,
             )
             for result in recommendations
+        ],
+    )
+
+
+@app.get("/api/parlays", response_model=ParlaysResponse)
+def get_parlays(
+    league: League = Query(default="all"),
+    legs: int = Query(default=3, ge=MIN_LEGS, le=MAX_LEGS),
+    limit: int = Query(default=5, ge=1, le=10),
+):
+    selected_leagues = LEAGUES if league == "all" else (league,)
+    candidates = [
+        leg
+        for leg in (
+            leg_from_recommendation(rec)
+            for rec in recommendation_service.load_recommendations(selected_leagues)
+        )
+        if leg is not None
+    ]
+    for selected in selected_leagues:
+        candidates.extend(
+            leg
+            for leg in (leg_from_prop(quote) for quote in player_prop_service.ranked_player_props(selected))
+            if leg is not None
+        )
+
+    return ParlaysResponse(
+        league=league,
+        leg_count=legs,
+        refreshed_at=datetime.now(timezone.utc),
+        parlays=[
+            ParlayResponse(
+                legs=[
+                    ParlayLegResponse(
+                        leg_id=leg.leg_id,
+                        source=leg.source,
+                        market=leg.kind if leg.kind != "prop" else (leg.stat_id or "prop"),
+                        description=leg.description,
+                        matchup=leg.matchup,
+                        probability=leg.probability,
+                        odds=leg.odds,
+                    )
+                    for leg in parlay.legs
+                ],
+                leg_count=len(parlay.legs),
+                probability=parlay.probability,
+                decimal_odds=parlay.decimal_odds,
+                american_odds=parlay.american_odds,
+                expected_value=parlay.expected_value,
+                has_correlated_legs=parlay.correlated,
+                notes=parlay.notes,
+            )
+            for parlay in build_parlays(candidates, leg_count=legs, limit=limit)
         ],
     )
 

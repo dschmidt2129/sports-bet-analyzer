@@ -18,6 +18,9 @@ logic.
   `/api/recommendations?league=all|nfl|college-football`.
 - `player_prop_service.py` fetches and caches sportsbook player-prop quotes from
   SportsGameOdds at `/api/player-props?league=nfl`.
+- `parlay.py` builds suggested 2–4 leg parlays from game picks and player props
+  at `/api/parlays?league=all|nfl|college-football&legs=2..4`. See
+  [Suggested parlays](#suggested-parlays).
 - `storage.py` records timestamped player-prop quotes and eventual outcomes in
   `player_prop_snapshots` for future model training.
 - `recommendation_service.py` coordinates the existing ESPN client, predictor,
@@ -59,6 +62,23 @@ Player-prop responses are cached for ten minutes to match the free tier's update
 cadence and reduce API usage. Quotes are saved with capture timestamps; only
 settled rows with the required player-stat features are returned by the
 training-data query.
+
+## Suggested parlays
+
+`/api/parlays` combines priced game picks and player props (props need a
+SportsGameOdds key) into the highest-probability parlays of the requested size.
+
+- Legs from different games are treated as independent; combined odds are the
+  product of the legs' decimal odds.
+- Legs from the same game are priced with a Gaussian copula using fixed,
+  conservative pairwise correlations (for example, an over and a receiving-yards
+  over are positively correlated). These correlations are heuristics, **not**
+  fitted to historical data, so same-game probabilities are rough estimates.
+  Sportsbooks also price same-game parlays differently from the naive product.
+- Contradictory same-game legs (such as spread and moneyline on opposite teams,
+  or the same player/stat twice) are excluded.
+- Game picks and props come from different providers, so they are matched to the
+  same game by normalized team names.
 
 ## Run the web UI
 

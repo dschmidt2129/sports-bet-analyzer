@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, ArrowDownUp, RefreshCw, Search, ShieldCheck, Sparkles, Target } from "lucide-react";
+import { Activity, ArrowDownUp, Layers, RefreshCw, Search, ShieldCheck, Sparkles, Target } from "lucide-react";
 
-import { fetchPlayerProps, fetchRecommendations } from "./api";
-import type { League, PlayerPropQuote, PlayerPropsResponse, Recommendation, RecommendationsResponse } from "./types";
+import { fetchParlays, fetchPlayerProps, fetchRecommendations } from "./api";
+import type {
+  League,
+  Parlay,
+  ParlaysResponse,
+  PlayerPropQuote,
+  PlayerPropsResponse,
+  Recommendation,
+  RecommendationsResponse,
+} from "./types";
 
 const leagueOptions: { value: League; label: string }[] = [
   { value: "nfl", label: "NFL" },
@@ -72,6 +80,38 @@ function PlayerPropRow({ quote, index }: { quote: PlayerPropQuote; index: number
   );
 }
 
+function ParlayCard({ parlay, index }: { parlay: Parlay; index: number }) {
+  return (
+    <article className="pick-card parlay-card" style={{ animationDelay: `${index * 55}ms` }}>
+      <div className="pick-topline">
+        <span className="market-tag">{parlay.leg_count}-leg parlay</span>
+        <span className="confidence">
+          <Activity size={14} aria-hidden="true" />
+          {Math.round(parlay.probability * 100)}% est. to hit
+        </span>
+      </div>
+      <ol className="parlay-legs">
+        {parlay.legs.map((leg) => (
+          <li key={leg.leg_id}>
+            <div>
+              <strong>{leg.description}</strong>
+              <span>{leg.matchup} · {leg.source === "prop" ? marketLabel(leg.market) : marketNames[leg.market] ?? leg.market}</span>
+            </div>
+            <span className="parlay-leg-odds">{formatOdds(leg.odds)}</span>
+          </li>
+        ))}
+      </ol>
+      {parlay.notes.map((note) => (
+        <p className="pick-reason" key={note}>{note}</p>
+      ))}
+      <div className="pick-footer">
+        <span>Combined odds</span>
+        <strong>{formatOdds(parlay.american_odds)}</strong>
+      </div>
+    </article>
+  );
+}
+
 function RecommendationCard({ item, index }: { item: Recommendation; index: number }) {
   return (
     <article className="pick-card" style={{ animationDelay: `${index * 55}ms` }}>
@@ -113,7 +153,11 @@ function LoadingCards() {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"picks" | "props">("picks");
+  const [activeTab, setActiveTab] = useState<"picks" | "props" | "parlays">("picks");
+  const [legCount, setLegCount] = useState(3);
+  const [parlayData, setParlayData] = useState<ParlaysResponse | null>(null);
+  const [parlaysLoading, setParlaysLoading] = useState(false);
+  const [parlaysError, setParlaysError] = useState<string | null>(null);
   const [league, setLeague] = useState<League>("nfl");
   const [data, setData] = useState<RecommendationsResponse | null>(null);
   const [propData, setPropData] = useState<PlayerPropsResponse | null>(null);
@@ -153,15 +197,30 @@ export default function App() {
     }
   }, []);
 
+  const loadParlays = useCallback(async (signal?: AbortSignal) => {
+    setParlaysLoading(true);
+    setParlaysError(null);
+    try {
+      setParlayData(await fetchParlays(league, legCount, signal));
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setParlaysError(cause instanceof Error ? cause.message : "Unable to load suggested parlays.");
+    } finally {
+      if (!signal?.aborted) setParlaysLoading(false);
+    }
+  }, [league, legCount]);
+
   useEffect(() => {
     const controller = new AbortController();
     if (activeTab === "props") {
       void loadPlayerProps(controller.signal);
+    } else if (activeTab === "parlays") {
+      void loadParlays(controller.signal);
     } else {
       void load(controller.signal);
     }
     return () => controller.abort();
-  }, [activeTab, load, loadPlayerProps, refreshCount]);
+  }, [activeTab, load, loadPlayerProps, loadParlays, refreshCount]);
 
   const recommendations = data?.recommendations ?? [];
   const quotes = propData?.props ?? [];
@@ -173,9 +232,11 @@ export default function App() {
     return matchesMarket && matchesSide && matchesPlayer;
   });
   const marketOptions = [...new Set(quotes.map((quote) => quote.stat_id))].sort();
-  const isLoading = activeTab === "props" ? propsLoading : loading;
-  const activeError = activeTab === "props" ? propsError : error;
-  const lastUpdated = activeTab === "props" ? propData?.refreshed_at : data?.refreshed_at;
+  const parlays = parlayData?.parlays ?? [];
+  const isLoading = activeTab === "props" ? propsLoading : activeTab === "parlays" ? parlaysLoading : loading;
+  const activeError = activeTab === "props" ? propsError : activeTab === "parlays" ? parlaysError : error;
+  const lastUpdated =
+    activeTab === "props" ? propData?.refreshed_at : activeTab === "parlays" ? parlayData?.refreshed_at : data?.refreshed_at;
   const formattedLastUpdated = lastUpdated
     ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(
         new Date(lastUpdated),
@@ -229,18 +290,32 @@ export default function App() {
           >
             <Target size={16} /> NFL player props
           </button>
+          <button
+            id="parlays-tab"
+            role="tab"
+            aria-selected={activeTab === "parlays"}
+            aria-controls="parlays-panel"
+            className={activeTab === "parlays" ? "active" : ""}
+            onClick={() => setActiveTab("parlays")}
+          >
+            <Layers size={16} /> Suggested parlays
+          </button>
         </div>
 
         <div className="section-heading">
           <div>
-            <div className="eyebrow subdued">{activeTab === "props" ? "SPORTSBOOK LINES" : "YOUR DASHBOARD"}</div>
-            <h2>{activeTab === "props" ? "NFL player props" : "Top recommendations"}</h2>
+            <div className="eyebrow subdued">
+              {activeTab === "props" ? "SPORTSBOOK LINES" : activeTab === "parlays" ? "COMBINED PICKS" : "YOUR DASHBOARD"}
+            </div>
+            <h2>{activeTab === "props" ? "NFL player props" : activeTab === "parlays" ? "Suggested parlays" : "Top recommendations"}</h2>
           </div>
           <button
             className={`refresh-button${isLoading ? " is-loading" : ""}`}
             onClick={() => setRefreshCount((count) => count + 1)}
             disabled={isLoading}
-            aria-label={activeTab === "props" ? "Refresh player props" : "Refresh recommendations"}
+            aria-label={
+              activeTab === "props" ? "Refresh player props" : activeTab === "parlays" ? "Refresh parlays" : "Refresh recommendations"
+            }
           >
             <RefreshCw size={16} />
             <span>Refresh</span>
@@ -248,7 +323,7 @@ export default function App() {
         </div>
 
         <div className="toolbar">
-          {activeTab === "picks" ? (
+          {activeTab === "picks" || activeTab === "parlays" ? (
             <div className="league-tabs" role="group" aria-label="Filter by league">
               {leagueOptions.map((option) => (
                 <button
@@ -260,6 +335,16 @@ export default function App() {
                   {option.label}
                 </button>
               ))}
+              {activeTab === "parlays" && (
+                <label className="market-filter leg-select">
+                  <span className="sr-only">Number of legs</span>
+                  <select value={legCount} onChange={(event) => setLegCount(Number(event.target.value))}>
+                    {[2, 3, 4].map((count) => (
+                      <option key={count} value={count}>{count} legs</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
           ) : (
             <div className="prop-controls">
@@ -294,28 +379,34 @@ export default function App() {
           )}
           <div className="result-meta">
             <ArrowDownUp size={14} />
-            <span>{isLoading ? "Updating" : activeTab === "props" ? `${visibleQuotes.length} lines` : `${recommendations.length} picks`}</span>
+            <span>{isLoading ? "Updating" : activeTab === "props" ? `${visibleQuotes.length} lines` : activeTab === "parlays" ? `${parlays.length} parlays` : `${recommendations.length} picks`}</span>
             {formattedLastUpdated && !isLoading && <span className="updated-time">· {formattedLastUpdated}</span>}
           </div>
         </div>
 
         <div
           role="tabpanel"
-          id={activeTab === "props" ? "props-panel" : "picks-panel"}
-          aria-labelledby={activeTab === "props" ? "props-tab" : "picks-tab"}
+          id={`${activeTab}-panel`}
+          aria-labelledby={`${activeTab}-tab`}
           tabIndex={0}
         >
         {activeError && (
           <div className="message-panel error-panel" role="alert">
             <div>
-              <strong>{activeTab === "props" ? "Couldn’t load player props" : "Couldn’t load recommendations"}</strong>
+              <strong>
+                {activeTab === "props"
+                  ? "Couldn’t load player props"
+                  : activeTab === "parlays"
+                    ? "Couldn’t load suggested parlays"
+                    : "Couldn’t load recommendations"}
+              </strong>
               <p>{activeError} Check that the API is running and reachable from this device.</p>
             </div>
             <button onClick={() => setRefreshCount((count) => count + 1)}>Try again</button>
           </div>
         )}
 
-        {isLoading && activeTab === "picks" && <LoadingCards />}
+        {isLoading && activeTab !== "props" && <LoadingCards />}
         {isLoading && activeTab === "props" && (
           <div className="prop-list" aria-label="Loading player props" aria-busy="true">
             {[0, 1, 2, 3].map((item) => <div className="prop-row prop-skeleton" key={item}><span /><span /><span /></div>)}
@@ -335,6 +426,22 @@ export default function App() {
             <span className="empty-icon"><Activity size={21} /></span>
             <strong>No high-confidence picks yet</strong>
             <p>Try another league or check back when this week’s games are available.</p>
+          </div>
+        )}
+
+        {activeTab === "parlays" && !parlaysLoading && !parlaysError && parlays.length > 0 && (
+          <div className="pick-grid">
+            {parlays.map((parlay, index) => (
+              <ParlayCard key={parlay.legs.map((leg) => leg.leg_id).join("|")} parlay={parlay} index={index} />
+            ))}
+          </div>
+        )}
+
+        {activeTab === "parlays" && !parlaysLoading && !parlaysError && parlays.length === 0 && (
+          <div className="message-panel empty-panel">
+            <span className="empty-icon"><Layers size={21} /></span>
+            <strong>No suggested parlays yet</strong>
+            <p>There aren’t enough priced, high-confidence legs to build a {legCount}-leg parlay. Try fewer legs or another league.</p>
           </div>
         )}
 

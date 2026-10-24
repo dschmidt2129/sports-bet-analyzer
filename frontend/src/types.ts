@@ -41,3 +41,31 @@ export interface PlayerPropsResponse {
   refreshed_at: string;
   props: PlayerPropQuote[];
 }
+
+export interface ParlayLeg {
+  leg_id: string;
+  source: "game" | "prop";
+  market: string;
+  description: string;
+  matchup: string;
+  probability: number;
+  odds: number;
+}
+
+export interface Parlay {
+  legs: ParlayLeg[];
+  leg_count: number;
+  probability: number;
+  decimal_odds: number;
+  american_odds: number;
+  expected_value: number;
+  has_correlated_legs: boolean;
+  notes: string[];
+}
+
+export interface ParlaysResponse {
+  league: League;
+  leg_count: number;
+  refreshed_at: string;
+  parlays: Parlay[];
+}

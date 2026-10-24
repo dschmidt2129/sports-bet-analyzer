@@ -85,6 +85,14 @@ h1, h2, p { margin: 0; }
 .prop-skeleton span:first-child { width: 68%; }
 .prop-skeleton span:nth-child(2) { width: 82%; }
 .prop-skeleton span:last-child { width: 45%; justify-self: end; }
+.parlay-legs { display: flex; flex-direction: column; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
+.parlay-legs li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.parlay-legs li:last-child { border-bottom: 0; padding-bottom: 0; }
+.parlay-legs strong { display: block; color: #f0f2f6; font-size: 13px; }
+.parlay-legs li span { color: #8992a2; font-size: 11px; }
+.parlay-legs .parlay-leg-odds { color: #f0f2f6; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.parlay-card .pick-reason { margin-top: 14px; }
+.leg-select { height: 30px; border: 0; background: #292f3a; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .pick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .pick-card { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 15px; background: linear-gradient(145deg, #1b202a, #171b24); animation: rise .4s both; transition: border-color .2s, transform .2s; }
