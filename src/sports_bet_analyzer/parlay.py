@@ -225,11 +225,7 @@ def _group_probability(group, cache):
 
 
 def _allowed(legs):
-    return all(
-        pair_correlation(a, b) is not None
-        for a, b in itertools.combinations(legs, 2)
-        if same_game(a, b)
-    )
+    return not any(same_game(a, b) for a, b in itertools.combinations(legs, 2))
 
 
 def build_parlays(legs, leg_count=3, limit=5):
@@ -248,7 +244,9 @@ def build_parlays(legs, leg_count=3, limit=5):
         probability = math.prod(_group_probability(group, cache) for group in groups)
         decimal_odds = math.prod(american_to_decimal(leg.odds) for leg in combo)
         correlated = any(len(group) > 1 for group in groups)
-        notes = []
+        notes = [
+            "DraftKings line availability and parlay eligibility are not verified; confirm in the sportsbook."
+        ]
         if correlated:
             notes.append(
                 "Includes same-game legs priced with estimated correlations; sportsbooks "

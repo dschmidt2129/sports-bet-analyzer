@@ -106,15 +106,12 @@ def test_build_parlays_multiplies_independent_games():
     assert not parlay.correlated
 
 
-def test_build_parlays_prices_same_game_legs_with_correlation():
+def test_build_parlays_excludes_legs_from_the_same_game():
     legs = [
         leg_from_recommendation(rec("g1", "total", "Over 47.5", 0.7, -110)),
         leg_from_prop(prop("mahomes", "passing_yards", "over", 0.7)),
     ]
-    parlay = build_parlays(legs, leg_count=2)[0]
-    assert parlay.correlated
-    assert parlay.probability > 0.49
-    assert parlay.notes
+    assert build_parlays(legs, leg_count=2) == []
 
 
 def test_build_parlays_skips_contradictory_legs_and_respects_size_and_limit():

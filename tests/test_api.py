@@ -138,16 +138,21 @@ def test_parlays_endpoint_combines_game_picks_and_props(monkeypatch):
         "odd_id": "passing_yards-mahomes-over",
         "player_id": "mahomes",
         "player_name": "Mahomes",
-        "team_id": "KANSAS_CITY_CHIEFS_NFL",
-        "opponent_team_id": "BUFFALO_BILLS_NFL",
+        "team_id": "DALLAS_COWBOYS_NFL",
+        "opponent_team_id": "NEW_YORK_GIANTS_NFL",
         "stat_id": "passing_yards",
         "side_id": "over",
+        "bookmaker_id": "draftkings",
         "line": 275.5,
         "odds": -115,
         "probability": 0.68,
     }
     monkeypatch.setattr(api.recommendation_service, "load_recommendations", lambda leagues: recommendations)
-    monkeypatch.setattr(api.player_prop_service, "ranked_player_props", lambda league: [quote])
+    monkeypatch.setattr(
+        api.player_prop_service,
+        "ranked_player_props",
+        lambda league, bookmaker_id=None: [quote] if bookmaker_id == "draftkings" else [],
+    )
 
     response = TestClient(api.app).get("/api/parlays?league=nfl")
 
@@ -158,14 +163,14 @@ def test_parlays_endpoint_combines_game_picks_and_props(monkeypatch):
     parlay = body["parlays_by_legs"]["2"][0]
     assert parlay["leg_count"] == 2
     assert {leg["source"] for leg in parlay["legs"]} == {"game", "prop"}
-    assert parlay["has_correlated_legs"] is True
+    assert parlay["has_correlated_legs"] is False
     assert 0 < parlay["probability"] < 1
     assert parlay["notes"]
 
 
 def test_parlays_endpoint_returns_empty_lists_without_enough_legs(monkeypatch):
     monkeypatch.setattr(api.recommendation_service, "load_recommendations", lambda leagues: [])
-    monkeypatch.setattr(api.player_prop_service, "ranked_player_props", lambda league: [])
+    monkeypatch.setattr(api.player_prop_service, "ranked_player_props", lambda league, bookmaker_id=None: [])
 
     response = TestClient(api.app).get("/api/parlays")
 

@@ -71,17 +71,16 @@ SportsGameOdds key) into the highest-probability parlays for each size from 2 to
 another request. Game recommendations and player props are each cached for ten
 minutes, so repeated parlay requests do not re-call ESPN or SportsGameOdds.
 
-- Legs from different games are treated as independent; combined odds are the
-  product of the legs' decimal odds.
-- Legs from the same game are priced with a Gaussian copula using fixed,
-  conservative pairwise correlations (for example, an over and a receiving-yards
-  over are positively correlated). These correlations are heuristics, **not**
-  fitted to historical data, so same-game probabilities are rough estimates.
-  Sportsbooks also price same-game parlays differently from the naive product.
-- Contradictory same-game legs (such as spread and moneyline on opposite teams,
-  or the same player/stat twice) are excluded.
+- Suggested parlays only combine legs from different games to avoid same-game
+  combinations DraftKings may reject; combined odds are the product of the legs'
+  decimal odds.
+- DraftKings line availability and parlay eligibility are not verified. Confirm
+  the current lines and accepted combination in the sportsbook before wagering.
 - Game picks and props come from different providers, so they are matched to the
   same game by normalized team names.
+- Parlay prop legs require a currently available DraftKings quote. SportsGameOdds
+  does not report DraftKings Same Game Parlay eligibility, so a suggested prop
+  combination may still be rejected by the sportsbook.
 
 ## Run the web UI
 

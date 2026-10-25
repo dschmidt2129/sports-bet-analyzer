@@ -81,10 +81,12 @@ class PlayerPropService:
         log.info("Loaded %d player-prop quote(s) league=%s", len(quotes), league)
         return list(quotes)
 
-    def ranked_player_props(self, league="nfl"):
-        """Return all quotes (best book per market) ordered by probability of hitting, highest first."""
+    def ranked_player_props(self, league="nfl", bookmaker_id=None):
+        """Return the best quote per market, ordered by probability of hitting, highest first."""
         best = {}
         for quote in self.load_player_props(league):
+            if bookmaker_id and (quote.get("bookmaker_id") or "").lower() != bookmaker_id.lower():
+                continue
             probability = self._hit_probability(quote)
             if probability is None:
                 continue

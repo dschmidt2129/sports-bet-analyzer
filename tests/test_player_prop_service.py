@@ -122,6 +122,20 @@ def test_ranked_player_props_orders_and_dedupes():
     assert top[0]["probability"] > top[-1]["probability"]
 
 
+def test_ranked_player_props_can_require_a_bookmaker():
+    service = PlayerPropService(client=FakeClient([]), history=FakeHistory(), predictor=FakePredictor())
+    quotes = [
+        _quote("market-dk", "over", 101, book="draftkings"),
+        _quote("market-fd", "over", 110, book="fanduel"),
+    ]
+    service._cache["nfl"] = (float("inf"), quotes)
+
+    ranked = service.ranked_player_props("nfl", bookmaker_id="draftkings")
+
+    assert [quote["odd_id"] for quote in ranked] == ["market-dk"]
+    assert ranked[0]["bookmaker_id"] == "draftkings"
+
+
 def test_current_week_window_runs_wednesday_to_wednesday():
     from datetime import datetime, timezone
 

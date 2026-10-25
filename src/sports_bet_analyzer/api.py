@@ -166,7 +166,10 @@ def get_parlays(
     for selected in selected_leagues:
         candidates.extend(
             leg
-            for leg in (leg_from_prop(quote) for quote in player_prop_service.ranked_player_props(selected))
+            for leg in (
+                leg_from_prop(quote)
+                for quote in player_prop_service.ranked_player_props(selected, bookmaker_id="draftkings")
+            )
             if leg is not None
         )
 
